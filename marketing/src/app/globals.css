@@ -1,0 +1,239 @@
+@import "tailwindcss";
+@import "./tokens.css";
+
+/* ─────────────────────────────────────────────────────────────────
+   Base
+   ───────────────────────────────────────────────────────────────── */
+
+html,
+body {
+  /* clip, never hidden — `hidden` kills position:sticky in the subtree */
+  overflow-x: clip;
+}
+
+html {
+  scroll-behavior: smooth;
+  /* the floating nav is ~72px; keep anchored sections clear of it */
+  scroll-padding-top: 6.5rem;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-synthesis-weight: none;
+  text-rendering: optimizeLegibility;
+}
+
+/* Display type is always roman. Long product words (e.g. compound venue
+   names) must break rather than force a horizontal scrollbar. */
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-style: normal;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+::selection {
+  background-color: var(--color-accent-soft);
+  color: var(--color-accent-ink);
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   Focus — visible instantly, never animated
+   ───────────────────────────────────────────────────────────────── */
+
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 3px;
+  border-radius: var(--radius-xs);
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   Above-the-fold entrance — CSS only, never JS.
+
+   Anything visible on load animates in from a keyframe, so its resting
+   state is *visible*. Never give [data-enter] a base opacity:0 — the whole
+   point is that if the animation never runs (no CSS animation support,
+   reduced motion, stylesheet raced), the content is simply there.
+
+   Scroll reveal below cannot be used above the fold: it is hidden by CSS
+   from the server render and needs hydration to clear, which on a slow
+   phone is a blank hero for as long as the JS takes.
+   ───────────────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-enter] {
+    animation: enter var(--dur-slow) var(--ease-out) both;
+    animation-delay: var(--enter-delay, 0ms);
+  }
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 1.25rem, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   Motion primitive 1 of 3 — scroll reveal (below the fold)
+
+   Scroll-driven CSS, no JavaScript. The hidden start state exists ONLY
+   inside this @supports block — the same feature that hides the element
+   is the one that animates it back, so the two can never come apart.
+
+   Where `animation-timeline: view()` is unsupported (older Safari,
+   Firefox without the flag) there is no rule at all and the content is
+   simply visible. That is the correct degradation.
+
+   This replaced an IntersectionObserver version that set opacity:0 from
+   CSS and needed JS to clear it. When the observer didn't fire, whole
+   sections stayed invisible. Do not reintroduce a JS-gated hidden state.
+   ───────────────────────────────────────────────────────────────── */
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    [data-reveal] {
+      animation: enter var(--dur-slow) var(--ease-out) both;
+      animation-timeline: view();
+      animation-range: entry 5% entry 60%;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-timeline: auto !important;
+    transition-duration: 150ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   Utilities
+   ───────────────────────────────────────────────────────────────── */
+
+@utility shell {
+  width: 100%;
+  max-width: 78rem;
+  margin-inline: auto;
+  padding-inline: 1.25rem;
+
+  @media (width >= 48rem) {
+    padding-inline: 2rem;
+  }
+}
+
+/* Uppercase micro-label. Used at most twice per page — see the
+   section-tag discipline in tokens.css. */
+@utility label {
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  line-height: var(--text-micro--line-height);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+/* Range input — styled from scratch so the track and thumb use our tokens.
+   Both vendor trees are needed; they cannot be combined into one selector. */
+.range {
+  appearance: none;
+  width: 100%;
+  height: 2.25rem;
+  background: transparent;
+  cursor: pointer;
+}
+
+.range::-webkit-slider-runnable-track {
+  height: 0.375rem;
+  border-radius: var(--radius-pill);
+  background: var(--color-paper-3);
+}
+
+.range::-moz-range-track {
+  height: 0.375rem;
+  border-radius: var(--radius-pill);
+  background: var(--color-paper-3);
+}
+
+.range::-moz-range-progress {
+  height: 0.375rem;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+}
+
+.range::-webkit-slider-thumb {
+  appearance: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-top: -0.5625rem;
+  border: 2px solid var(--color-accent);
+  border-radius: var(--radius-pill);
+  background: var(--color-card);
+  box-shadow: var(--shadow-plate);
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.range::-moz-range-thumb {
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 2px solid var(--color-accent);
+  border-radius: var(--radius-pill);
+  background: var(--color-card);
+  box-shadow: var(--shadow-plate);
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.range:hover::-webkit-slider-thumb,
+.range:active::-webkit-slider-thumb {
+  transform: scale(1.08);
+  box-shadow: var(--shadow-lift);
+}
+
+.range:hover::-moz-range-thumb,
+.range:active::-moz-range-thumb {
+  transform: scale(1.08);
+  box-shadow: var(--shadow-lift);
+}
+
+.range:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .range::-webkit-slider-thumb,
+  .range::-moz-range-thumb {
+    transition: none;
+  }
+}
+
+/* Hairline that fades at both ends — replaces the flat 1px divider. */
+@utility hairline {
+  height: 1px;
+  border: 0;
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--color-rule-strong) 12%,
+    var(--color-rule-strong) 88%,
+    transparent
+  );
+}
