@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: reservme
+          POSTGRES_PASSWORD: reservme_dev_password
+          POSTGRES_DB: reservme
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U reservme"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://reservme:reservme_dev_password@localhost:5433/reservme
+      BETTER_AUTH_SECRET: ci-secret-thirty-two-bytes-minimum-000
+      BETTER_AUTH_URL: http://app.localhost:3000
+      NEXT_PUBLIC_APEX_HOST: localhost:3000
+      NEXT_PUBLIC_APP_HOST: app.localhost:3000
+      NEXT_PUBLIC_ADMIN_HOST: admin.localhost:3000
+      NEXT_PUBLIC_PROTOCOL: http
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Lint
+        run: npx eslint src scripts
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Migrate + seed
+        run: |
+          npx tsx scripts/migrate.ts
+          npx tsx scripts/seed.ts
+
+      # Engine-level suites need only the database.
+      - name: Booking concurrency
+        run: npx tsx scripts/test-concurrency.ts
+      - name: Booking management
+        run: npx tsx scripts/test-manage.ts
+      - name: Rate limiting
+        run: npx tsx scripts/test-ratelimit.ts
+
+      # HTTP suites need the app running; start web + worker in the background.
+      - name: Start app
+        run: |
+          npm run start &
+          echo "WEB_PID=$!" >> "$GITHUB_ENV"
+          npx tsx scripts/worker.ts &
+          echo "WORKER_PID=$!" >> "$GITHUB_ENV"
+          npx wait-on http://localhost:3000/api/healthz --timeout 60000
+
+      - name: Onboarding, admin, and jobs
+        run: |
+          npx tsx scripts/test-onboarding.ts
+          npx tsx scripts/test-admin.ts
+          npx tsx scripts/test-jobs.ts
+
+      - name: Stop app
+        if: always()
+        run: |
+          kill "$WEB_PID" "$WORKER_PID" 2>/dev/null || true

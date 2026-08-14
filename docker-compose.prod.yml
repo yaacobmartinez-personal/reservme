@@ -1,0 +1,68 @@
+# Production-shaped composition: migrate once, then run web + worker from the
+# same image. Point DATABASE_URL at your managed Postgres (or keep the db
+# service below for a single-box deploy). This is a reference — a real deploy
+# would run these on your platform of choice with secrets injected.
+
+services:
+  migrate:
+    build: .
+    command: ["node", "migrate.js"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    restart: "no"
+
+  web:
+    build: .
+    command: ["node", "server.js"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL}
+      NEXT_PUBLIC_APEX_HOST: ${NEXT_PUBLIC_APEX_HOST}
+      NEXT_PUBLIC_APP_HOST: ${NEXT_PUBLIC_APP_HOST}
+      NEXT_PUBLIC_ADMIN_HOST: ${NEXT_PUBLIC_ADMIN_HOST}
+      NEXT_PUBLIC_PROTOCOL: https
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-ReservMe <bookings@reservme.pro>}
+      TURNSTILE_SECRET: ${TURNSTILE_SECRET:-}
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  worker:
+    build: .
+    command: ["node", "worker.js"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-ReservMe <bookings@reservme.pro>}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+    restart: unless-stopped
+
+  # On-demand backup: `docker compose -f docker-compose.prod.yml run --rm backup`.
+  # Uses the postgres image because it ships pg_dump. Schedule it from cron or a
+  # platform scheduled job (managed Postgres usually also has its own backups —
+  # this gives you a portable, restorable copy you control).
+  backup:
+    image: postgres:17-alpine
+    profiles: ["tools"]
+    entrypoint: ["sh", "/scripts/backup.sh"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      BACKUP_RETENTION: ${BACKUP_RETENTION:-14}
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:-}
+    volumes:
+      - ./scripts:/scripts:ro
+      - ./backups:/backups
+    working_dir: /

@@ -1,0 +1,123 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { z } from "zod";
+import { sql } from "@/db";
+import { requirePlatformAdmin } from "@/lib/admin/access";
+import { recordAdminAction } from "@/lib/admin/audit";
+import { endImpersonation, startImpersonation } from "@/lib/admin/impersonation";
+
+const orgId = z.string().min(1);
+
+/**
+ * Every action re-checks admin status server-side. The console being behind a
+ * hostname is routing, not authorisation — a form post can be replayed against
+ * any host.
+ */
+
+export async function suspendVenue(formData: FormData) {
+  const admin = await requirePlatformAdmin();
+  const organizationId = orgId.parse(formData.get("organizationId"));
+  const reason = String(formData.get("reason") ?? "").trim() || null;
+
+  await sql`
+    UPDATE venue
+       SET suspended_at = now(), suspended_reason = ${reason}
+     WHERE organization_id = ${organizationId}
+  `;
+
+  await recordAdminAction({
+    actorUserId: admin.userId,
+    action: "admin.suspended_venue",
+    organizationId,
+    detail: reason ? { reason } : undefined,
+  });
+
+  revalidatePath("/", "layout");
+}
+
+export async function reactivateVenue(formData: FormData) {
+  const admin = await requirePlatformAdmin();
+  const organizationId = orgId.parse(formData.get("organizationId"));
+
+  await sql`
+    UPDATE venue
+       SET suspended_at = NULL, suspended_reason = NULL
+     WHERE organization_id = ${organizationId}
+  `;
+
+  await recordAdminAction({
+    actorUserId: admin.userId,
+    action: "admin.reactivated_venue",
+    organizationId,
+  });
+
+  revalidatePath("/", "layout");
+}
+
+export async function impersonate(formData: FormData) {
+  const admin = await requirePlatformAdmin();
+  const organizationId = orgId.parse(formData.get("organizationId"));
+  const reason = String(formData.get("reason") ?? "").trim() || null;
+
+  await startImpersonation({
+    adminUserId: admin.userId,
+    organizationId,
+    reason: reason ?? undefined,
+  });
+
+  await recordAdminAction({
+    actorUserId: admin.userId,
+    action: "admin.impersonation_started",
+    organizationId,
+    detail: reason ? { reason } : undefined,
+  });
+
+  // The impersonated view is rendered inside the admin console rather than on
+  // the app host. That keeps the impersonation cookie host-only — widening it
+  // to .reservme.pro would send it to the public booking pages too — and means
+  // the admin is never on the real tenant surface wondering who they are.
+  redirect("/viewing");
+}
+
+export async function stopImpersonating() {
+  const admin = await requirePlatformAdmin();
+  const ended = await endImpersonation();
+
+  if (ended) {
+    await recordAdminAction({
+      actorUserId: admin.userId,
+      action: "admin.impersonation_ended",
+      organizationId: ended.organizationId,
+    });
+  }
+
+  revalidatePath("/", "layout");
+}
+
+export async function revokeAdmin(formData: FormData) {
+  const admin = await requirePlatformAdmin();
+  const userId = z.string().min(1).parse(formData.get("userId"));
+
+  // Removing the last admin would lock everyone out of the console with no way
+  // back in short of a database session.
+  const [{ remaining }] = await sql<{ remaining: number }[]>`
+    SELECT count(*)::int AS remaining FROM platform_admin
+    WHERE revoked_at IS NULL AND user_id <> ${userId}
+  `;
+  if (remaining === 0) return;
+
+  await sql`
+    UPDATE platform_admin SET revoked_at = now()
+    WHERE user_id = ${userId} AND revoked_at IS NULL
+  `;
+
+  await recordAdminAction({
+    actorUserId: admin.userId,
+    action: "admin.revoked_admin",
+    target: userId,
+  });
+
+  revalidatePath("/", "layout");
+}

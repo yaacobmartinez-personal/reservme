@@ -1,0 +1,25 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: reservme-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: reservme
+      POSTGRES_PASSWORD: reservme_dev_password
+      POSTGRES_DB: reservme
+      # Booking correctness depends on unambiguous timestamps. The database
+      # stores UTC; venue-local rendering happens in the app.
+      TZ: UTC
+      PGTZ: UTC
+    ports:
+      - "5433:5432"
+    volumes:
+      - reservme-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reservme -d reservme"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  reservme-pgdata:

@@ -6,21 +6,41 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:migrate": "tsx --env-file=.env.local scripts/migrate.ts",
+    "db:seed": "tsx --env-file=.env.local scripts/seed.ts",
+    "test:booking": "tsx --env-file=.env.local scripts/test-concurrency.ts",
+    "admin:grant": "tsx --env-file=.env.local scripts/grant-admin.ts",
+    "test:admin": "tsx --env-file=.env.local scripts/test-admin.ts",
+    "test:onboarding": "tsx --env-file=.env.local scripts/test-onboarding.ts",
+    "worker": "tsx --env-file=.env.local scripts/worker.ts",
+    "test:jobs": "tsx --env-file=.env.local scripts/test-jobs.ts",
+    "test:manage": "tsx --env-file=.env.local scripts/test-manage.ts",
+    "test:ratelimit": "tsx --env-file=.env.local scripts/test-ratelimit.ts",
+    "db:backup": "sh scripts/backup.sh",
+    "db:restore": "sh scripts/restore.sh"
   },
   "dependencies": {
+    "@sentry/node": "^10.70.0",
+    "better-auth": "^1.6.27",
+    "drizzle-orm": "^0.45.2",
     "next": "16.3.0",
+    "pg-boss": "^10.4.2",
+    "postgres": "^3.4.9",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.3.0",
     "tailwindcss": "^4",
+    "tsx": "^4.23.12",
     "typescript": "^5"
   }
 }
