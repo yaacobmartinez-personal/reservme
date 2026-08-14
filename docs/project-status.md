@@ -90,6 +90,10 @@ it — not "should work," but "seen working."
 
 Ordered roughly by importance for running this as a real business.
 
+> **Execution plans exist** for the two priorities below — self-contained,
+> ready to hand to a cold start: [`plan-dashboard-redesign.md`](plan-dashboard-redesign.md)
+> and [`plan-billing.md`](plan-billing.md).
+
 ### 1. Redesign the owner dashboard as a real business dashboard ⬅ NEW PRIORITY
 
 **This is a business, not a school project, and the dashboard currently looks
