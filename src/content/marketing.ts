@@ -7,6 +7,7 @@
  * (price, template count, commission rate) or a count derived from data on
  * this page — never a fabricated metric.
  */
+import { appUrl } from "@/lib/env";
 
 export const SITE = {
   name: "ReservMe",
@@ -16,6 +17,20 @@ export const SITE = {
   url: "https://reservme.pro",
   bookingDomain: "reservme.pro",
 } as const;
+
+/**
+ * Auth lives on the app host, a different origin from the marketing site, so
+ * these must be absolute cross-host URLs — a relative "/login" from the apex
+ * 404s into the [venueSlug] route. `?new=1` opens the create-venue tab.
+ * `appUrl()` resolves to the app host for the current environment.
+ */
+export const AUTH = {
+  login: appUrl("/login"),
+  signup: appUrl("/login?new=1"),
+} as const;
+
+/** Where "Contact" / "Talk to us" / "Support" point (a page on the apex). */
+export const CONTACT_HREF = "/contact";
 
 export const CURRENCY = { code: "PHP", symbol: "₱" } as const;
 
@@ -98,7 +113,7 @@ export const HERO = {
   badge: "First month free — built for Philippine venues",
   headline: "Your calendar fills itself.",
   lede: "One branded booking page for courts, studios, karaoke rooms, restaurants and island-hopping boats. Live availability, GCash at checkout, instant confirmation — and not one centavo of commission.",
-  primaryCta: { label: "Create your page", href: "/signup" },
+  primaryCta: { label: "Create your page", href: AUTH.signup },
   secondaryCta: { label: "See pricing", href: "#pricing" },
   footnote: `No card to start · from ${peso(ENTRY_PRICE)} a month, per venue · 0% commission, always`,
 } as const;
@@ -343,15 +358,15 @@ export const PRICING = {
     { label: "8-court complex", spaces: 8 },
   ],
   note: "Move between bands whenever you like — add a court mid-month and you only pay the difference.",
-  cta: { label: "Start your free month", href: "/signup" },
-  quoteCta: { label: "Get a quote", href: "/contact" },
+  cta: { label: "Start your free month", href: AUTH.signup },
+  quoteCta: { label: "Get a quote", href: CONTACT_HREF },
   fine: "Prices in PHP, VAT included · no card to start · cancel any time",
   gateway:
     "Gateway fees go to PayMongo or Xendit at their published rates — QR Ph from 1.34%, GCash 2.23%. We add nothing on top.",
   volume: {
     text: "More than fifteen spaces, several branches, or a custom integration?",
     label: "Talk to us",
-    href: "/contact",
+    href: CONTACT_HREF,
   },
 } as const;
 
@@ -409,7 +424,7 @@ export const FAQS = [
 export const CLOSING = {
   title: "Stop taking bookings in the group chat.",
   body: `Your first month is free. After that it starts at ${peso(ENTRY_PRICE)} a month for the whole venue, with 0% commission for as long as you stay.`,
-  cta: { label: "Create your booking page", href: "/signup" },
+  cta: { label: "Create your booking page", href: AUTH.signup },
 } as const;
 
 export const FOOTER_GROUPS = [
@@ -435,10 +450,10 @@ export const FOOTER_GROUPS = [
   {
     heading: "Company",
     links: [
-      { label: "Contact", href: "/contact" },
-      { label: "Support", href: "/support" },
-      { label: "Log in", href: "/login" },
-      { label: "Sign up", href: "/signup" },
+      { label: "Contact", href: CONTACT_HREF },
+      { label: "Support", href: CONTACT_HREF },
+      { label: "Log in", href: AUTH.login },
+      { label: "Sign up", href: AUTH.signup },
     ],
   },
 ] as const;

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { ButtonLink } from "@/components/ui/button";
 import { Wordmark } from "@/components/marketing/wordmark";
-import { NAV_LINKS } from "@/content/marketing";
+import { AUTH, NAV_LINKS } from "@/content/marketing";
 
 /** N5 — floating pill. Detached from the page edge, opaque once you scroll. */
 export function SiteNav() {
@@ -74,12 +74,12 @@ export function SiteNav() {
 
           <div className="ml-auto flex items-center gap-1 md:ml-2">
             <Link
-              href="/login"
+              href={AUTH.login}
               className="hidden h-9 items-center whitespace-nowrap rounded-pill px-3.5 text-[0.9375rem] text-ink-2 transition-colors duration-[--dur-fast] ease-out hover:bg-paper-3 hover:text-ink sm:inline-flex"
             >
               Log in
             </Link>
-            <ButtonLink href="/signup" className="h-9 px-4 text-[0.9375rem]">
+            <ButtonLink href={AUTH.signup} className="h-9 px-4 text-[0.9375rem]">
               Start free
             </ButtonLink>
 
@@ -120,7 +120,7 @@ export function SiteNav() {
             className="mt-2 rounded-lg border border-rule bg-card p-2 shadow-float md:hidden"
           >
             <ul>
-              {[...NAV_LINKS, { label: "Log in", href: "/login" }].map((link) => (
+              {[...NAV_LINKS, { label: "Log in", href: AUTH.login }].map((link) => (
                 <li key={link.label}>
                   <Link
                     href={link.href}

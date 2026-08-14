@@ -12,9 +12,9 @@ type Mode = "signin" | "signup";
 const FIELD =
   "h-11 w-full rounded-sm border border-rule bg-paper-2 px-3 text-[0.9375rem]";
 
-export function LoginForm() {
+export function LoginForm({ startOnSignup = false }: { startOnSignup?: boolean }) {
   const router = useRouter();
-  const [mode, setMode] = useState<Mode>("signin");
+  const [mode, setMode] = useState<Mode>(startOnSignup ? "signup" : "signin");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
