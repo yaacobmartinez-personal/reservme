@@ -4,6 +4,33 @@ import { organization } from "better-auth/plugins";
 import { db, schema } from "@/db";
 import { serverEnv } from "@/lib/env";
 import { adminUrl, APP_HOST, appUrl } from "@/lib/env";
+import { log } from "@/lib/log";
+
+/**
+ * BETTER_AUTH_URL is *our app's* origin (where /api/auth is served) — the same
+ * origin as NEXT_PUBLIC_APP_HOST. It is NOT a database URL and NOT a hosted
+ * auth service (Better Auth runs in this app; it only stores its tables in our
+ * Postgres). A common mistake is to paste a "Neon Auth" URL here — that is a
+ * different product we don't use. Warn loudly if the origin doesn't line up,
+ * because the symptom otherwise is broken sign-in with no obvious cause.
+ */
+function assertAuthUrlCoherent() {
+  try {
+    const authOrigin = new URL(serverEnv().BETTER_AUTH_URL).host;
+    const appOrigin = new URL(appUrl()).host;
+    if (authOrigin !== appOrigin) {
+      log.warn("BETTER_AUTH_URL does not match the app host — sign-in will break", {
+        betterAuthUrlHost: authOrigin,
+        expectedHost: appOrigin,
+        hint: "Set BETTER_AUTH_URL to your app origin (e.g. https://app.reservme.pro), not a database or Neon Auth URL.",
+      });
+    }
+  } catch {
+    log.warn("BETTER_AUTH_URL is not a valid URL");
+  }
+}
+
+assertAuthUrlCoherent();
 
 /**
  * Auth lives only on app.reservme.pro. The apex serves marketing and the
