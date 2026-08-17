@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth-client";
 
-export function SignOutButton() {
+export function SignOutButton({ className }: { className?: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
 
@@ -13,6 +13,7 @@ export function SignOutButton() {
     <Button
       variant="outline"
       disabled={busy}
+      className={className}
       onClick={async () => {
         setBusy(true);
         await authClient.signOut();
