@@ -94,7 +94,18 @@ Ordered roughly by importance for running this as a real business.
 > ready to hand to a cold start: [`plan-dashboard-redesign.md`](plan-dashboard-redesign.md)
 > and [`plan-billing.md`](plan-billing.md).
 
-### 1. Redesign the owner dashboard as a real business dashboard ⬅ NEW PRIORITY
+### 1. Redesign the owner dashboard as a real business dashboard — ✅ DONE (2026-08-14)
+
+Built and verified. The dashboard is now KPI tiles with sparklines + deltas
+(booked value, bookings, utilisation, no-show rate), booked-value & utilisation
+trend charts, a booking-mix donut, revenue-by-space bars, a peak-hours heatmap,
+a customers panel, a "needs you" list, a period selector (today/7d/30d/90d), and
+the run sheet with its actions. `src/lib/analytics.ts` does the aggregation in
+venue-local time; charts are Recharts, token-coloured. `npm run test:analytics`
+(13 checks) + a 237-booking browser walkthrough. Remaining polish if wanted:
+closures in the utilisation denominator, a custom date range, dark mode.
+
+<details><summary>Original brief (kept for context)</summary>
 
 **This is a business, not a school project, and the dashboard currently looks
 like one.** Today it's a row of stat tiles and a flat run-sheet list — functional,
@@ -125,6 +136,8 @@ should read like Linear/Stripe-grade product UI, not an MVP.
 The public booking page and the run sheet's *actions* are fine; it's the
 **dashboard's information design and visual quality** that need the lift. Treat
 this as a first-class feature, not a polish pass.
+
+</details>
 
 ### 2. Billing — knowing when the free month is up and collecting
 
