@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { VenueDashboard } from "@/components/dashboard/venue-dashboard";
+import { Dashboard } from "@/components/dashboard/dashboard";
+import { getDashboard, rangeDays } from "@/lib/analytics";
 import { requirePlatformAdmin } from "@/lib/admin/access";
 import { sweepExpiredHolds } from "@/lib/booking/reserve";
 import { currentVenue } from "@/lib/tenancy";
+import { getRunSheet } from "@/lib/venue";
 
 export const metadata: Metadata = { title: "Viewing as venue" };
 export const dynamic = "force-dynamic";
@@ -13,7 +15,11 @@ export const dynamic = "force-dynamic";
  * the admin console under the banner in the layout — so it is never possible
  * to be looking at someone else's venue without knowing it.
  */
-export default async function ViewingPage() {
+export default async function ViewingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ range?: string }>;
+}) {
   await requirePlatformAdmin();
   const venue = await currentVenue();
 
@@ -38,10 +44,22 @@ export default async function ViewingPage() {
 
   await sweepExpiredHolds();
 
+  const { key: activeRange, days } = rangeDays((await searchParams).range);
+  const [data, runSheet] = await Promise.all([
+    getDashboard(venue.organizationId, venue.timezone, days),
+    getRunSheet(venue.organizationId, venue.timezone),
+  ]);
+
   return (
-    <main className="flex-1 py-10 sm:py-14">
+    <main className="flex-1 py-8 sm:py-12">
       <div className="shell">
-        <VenueDashboard venue={venue} />
+        <Dashboard
+          venue={venue}
+          data={data}
+          runSheet={runSheet}
+          activeRange={activeRange}
+          basePath="/viewing"
+        />
       </div>
     </main>
   );

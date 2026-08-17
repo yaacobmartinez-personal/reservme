@@ -64,6 +64,8 @@ jobs:
         run: npx tsx scripts/test-manage.ts
       - name: Rate limiting
         run: npx tsx scripts/test-ratelimit.ts
+      - name: Analytics
+        run: npx tsx scripts/test-analytics.ts
 
       # HTTP suites need the app running; start web + worker in the background.
       - name: Start app

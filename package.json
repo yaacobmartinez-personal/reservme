@@ -18,7 +18,8 @@
     "test:manage": "tsx --env-file=.env.local scripts/test-manage.ts",
     "test:ratelimit": "tsx --env-file=.env.local scripts/test-ratelimit.ts",
     "db:backup": "sh scripts/backup.sh",
-    "db:restore": "sh scripts/restore.sh"
+    "db:restore": "sh scripts/restore.sh",
+    "test:analytics": "tsx --env-file=.env.local scripts/test-analytics.ts"
   },
   "dependencies": {
     "@sentry/node": "^10.70.0",
@@ -29,6 +30,7 @@
     "postgres": "^3.4.9",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "recharts": "^3.10.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
