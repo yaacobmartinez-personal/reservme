@@ -22,6 +22,14 @@ queries, actions, nav entry, and tests.
 to customers, merge-duplicates, CSV import, GDPR/DPA export-per-customer button
 (the privacy right exists; the button is a later add), loyalty/points.
 
+**Deferred to the Calendar feature — "New booking for this customer".** A
+prominent action on the customer profile that opens a pre-filled manual/walk-in
+booking. Deliberately held back: manual booking entry is the calendar/schedule
+feature (pillar 3 in `dashboard-feature-research.md`), which lands next. When it
+ships, add a "New booking" button to the profile header that deep-links into the
+calendar's create flow with this customer pre-selected. Owner-confirmed at the
+wireframe stage (2026-08-17).
+
 ---
 
 ## What exists vs what's new

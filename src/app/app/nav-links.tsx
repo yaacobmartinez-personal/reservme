@@ -36,6 +36,21 @@ const LINKS = [
     ),
   },
   {
+    href: "/customers",
+    label: "Customers",
+    icon: (
+      <Icon
+        path={
+          <>
+            <circle cx="7" cy="7" r="2.75" {...stroke} />
+            <path d="M2.5 16.5c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4" {...stroke} />
+            <path d="M13 4.6a2.75 2.75 0 0 1 0 5.3M14.2 12.8c1.9.5 3.3 1.9 3.3 3.7" {...stroke} />
+          </>
+        }
+      />
+    ),
+  },
+  {
     href: "/spaces",
     label: "Spaces",
     icon: (

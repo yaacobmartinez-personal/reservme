@@ -19,7 +19,8 @@
     "test:ratelimit": "tsx --env-file=.env.local scripts/test-ratelimit.ts",
     "db:backup": "sh scripts/backup.sh",
     "db:restore": "sh scripts/restore.sh",
-    "test:analytics": "tsx --env-file=.env.local scripts/test-analytics.ts"
+    "test:analytics": "tsx --env-file=.env.local scripts/test-analytics.ts",
+    "test:crm": "tsx --env-file=.env.local scripts/test-crm.ts"
   },
   "dependencies": {
     "@sentry/node": "^10.70.0",

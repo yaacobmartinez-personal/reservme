@@ -197,9 +197,33 @@ export const customer = pgTable(
     email: text("email").notNull(),
     phone: text("phone"),
     noShowCount: integer("no_show_count").notNull().default(0),
+    // CRM (0003): hand-curated tags + marketing consent. See customerNote below.
+    tags: text("tags").array().notNull().default([]),
+    marketingOptIn: boolean("marketing_opt_in").notNull().default(false),
     createdAt,
   },
   (t) => [unique().on(t.organizationId, t.email)],
+);
+
+/** Free-form staff notes on a customer (0003_crm.sql). */
+export const customerNote = pgTable(
+  "customer_note",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customer.id, { onDelete: "cascade" }),
+    // Kept when the staffer is deleted; the org cascade reaps the note.
+    authorUserId: text("author_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    body: text("body").notNull(),
+    createdAt,
+  },
+  (t) => [index("customer_note_customer_idx").on(t.customerId, t.createdAt)],
 );
 
 export const playSession = pgTable(
