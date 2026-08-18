@@ -1,4 +1,6 @@
 import { sql } from "@/db";
+import { getLocalDates } from "@/lib/venue";
+import { getDayAvailability } from "./availability";
 
 /**
  * Customer self-service: read a booking by its manage token and decide whether
@@ -63,7 +65,10 @@ export type ManageableBooking = {
   venueName: string;
   venueSlug: string;
   theme: string;
+  spaceId: string;
   spaceName: string;
+  timezone: string;
+  slotMinutes: number;
   whenLabel: string;
   reference: string;
   amountCents: number;
@@ -93,7 +98,10 @@ export async function getManageableBooking(
       venue_name: string;
       venue_slug: string;
       theme: string;
+      space_id: string;
       space_name: string;
+      timezone: string;
+      slot_minutes: number;
       when_label: string;
       reference: string;
       amount_cents: number;
@@ -106,7 +114,7 @@ export async function getManageableBooking(
   >`
     SELECT r.organization_id, r.id AS reservation_id,
            o.name AS venue_name, o.slug AS venue_slug, v.theme,
-           s.name AS space_name,
+           s.id AS space_id, s.name AS space_name, s.slot_minutes, v.timezone,
            to_char(r.starts_at AT TIME ZONE v.timezone, 'Dy DD Mon, HH24:MI')
              || '–' ||
              to_char(r.ends_at AT TIME ZONE v.timezone, 'HH24:MI') AS when_label,
@@ -127,7 +135,10 @@ export async function getManageableBooking(
     venueName: row.venue_name,
     venueSlug: row.venue_slug,
     theme: row.theme,
+    spaceId: row.space_id,
     spaceName: row.space_name,
+    timezone: row.timezone,
+    slotMinutes: row.slot_minutes,
     whenLabel: row.when_label,
     reference: row.reference,
     amountCents: row.amount_cents,
@@ -150,6 +161,7 @@ export async function getBookingForCancel(
 ): Promise<{
   organizationId: string;
   reservationId: string;
+  spaceId: string;
   eligibility: CancelEligibility;
 } | null> {
   if (!UUID.test(token)) return null;
@@ -157,13 +169,14 @@ export async function getBookingForCancel(
     {
       organization_id: string;
       reservation_id: string;
+      space_id: string;
       status: string;
       starts_at: Date;
       cancellation_mode: CancellationMode;
       cancellation_grace_hours: number;
     }[]
   >`
-    SELECT r.organization_id, r.id AS reservation_id, r.status, r.starts_at,
+    SELECT r.organization_id, r.id AS reservation_id, r.space_id, r.status, r.starts_at,
            v.cancellation_mode, v.cancellation_grace_hours
     FROM reservation r
     JOIN organization o ON o.id = r.organization_id
@@ -174,6 +187,7 @@ export async function getBookingForCancel(
   return {
     organizationId: row.organization_id,
     reservationId: row.reservation_id,
+    spaceId: row.space_id,
     eligibility: cancelEligibility(
       row.status,
       row.starts_at,
@@ -181,4 +195,34 @@ export async function getBookingForCancel(
       row.cancellation_grace_hours,
     ),
   };
+}
+
+export type RescheduleDay = {
+  date: string;
+  weekday: string;
+  dayNum: string;
+  slots: { time: string; startsAtISO: string }[];
+};
+
+/** Open slots on this space over the next `days` local dates, for the picker. */
+export async function rescheduleOptions(
+  organizationId: string,
+  spaceId: string,
+  timezone: string,
+  days = 7,
+): Promise<RescheduleDay[]> {
+  const dates = await getLocalDates(timezone, days);
+  const out: RescheduleDay[] = [];
+  for (const d of dates) {
+    const slots = await getDayAvailability(organizationId, spaceId, d.d);
+    out.push({
+      date: d.d,
+      weekday: d.weekday,
+      dayNum: d.day,
+      slots: slots
+        .filter((s) => s.available)
+        .map((s) => ({ time: s.label, startsAtISO: s.startsAt.toISOString() })),
+    });
+  }
+  return out;
 }

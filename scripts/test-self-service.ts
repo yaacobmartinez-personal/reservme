@@ -19,7 +19,9 @@ async function main() {
   const { cancelEligibility, getManageableBooking, getBookingForCancel } = await import(
     "../src/lib/booking/manage"
   );
-  const { reserveSpace, cancelReservation } = await import("../src/lib/booking/reserve");
+  const { reserveSpace, cancelReservation, moveReservation } = await import(
+    "../src/lib/booking/reserve"
+  );
 
   const future = new Date(Date.now() + 48 * 3600_000);
   const soon = new Date(Date.now() + 2 * 3600_000);
@@ -97,6 +99,32 @@ async function main() {
     const afterCancel = await getManageableBooking(ORG, token);
     check("a cancelled booking can't be cancelled again",
       afterCancel?.status === "cancelled" && afterCancel.cancellation.canCancel === false);
+
+    /* ── reschedule (same space, customer policy) ── */
+    const s3 = await slot(4, 10);
+    const r1 = await reserveSpace({
+      organizationId: ORG, spaceId: space.id, ...s3,
+      customer: { name: "Fay", email: "fay@x.com" },
+    });
+    const target = await at(4, 12);
+    await moveReservation(ORG, r1.id, space.id, target, { staff: false });
+    const [{ h: newHour }] = await sql<{ h: string }[]>`
+      SELECT to_char(starts_at AT TIME ZONE ${TZ}, 'HH24') AS h FROM reservation WHERE id = ${r1.id}::uuid`;
+    check("reschedule moves the booking to the new time", newHour === "12", newHour);
+
+    const freeOld = await reserveSpace({
+      organizationId: ORG, spaceId: space.id, ...s3,
+      customer: { name: "Gus", email: "gus@x.com" },
+    });
+    check("reschedule frees the old slot", !!freeOld.id);
+
+    let clash = false;
+    try {
+      await moveReservation(ORG, r1.id, space.id, s3.startsAt, { staff: false });
+    } catch (e) {
+      clash = typeof e === "object" && e !== null && "reason" in e && (e as { reason: string }).reason === "slot_taken";
+    }
+    check("reschedule onto a taken slot is refused", clash);
 
     /* ── policy modes on a live future booking ── */
     const s2 = await slot(3, 14);

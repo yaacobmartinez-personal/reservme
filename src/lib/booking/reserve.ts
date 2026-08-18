@@ -535,6 +535,7 @@ export async function moveReservation(
   id: string,
   newSpaceId: string,
   newStartsAt: Date,
+  opts: { staff?: boolean } = {},
 ): Promise<Reservation> {
   const [existing] = await sql<{ starts_at: Date; ends_at: Date }[]>`
     SELECT starts_at, ends_at
@@ -552,7 +553,9 @@ export async function moveReservation(
 
   const placement = await derivePlacement(organizationId, newSpaceId, newStartsAt, newEndsAt);
   if (!placement) throw new BookingError("not_found");
-  validatePlacement(placement, minutes, true);
+  // Staff moves (calendar) relax notice/horizon; a customer reschedule must pass
+  // the same policy a fresh public booking would.
+  validatePlacement(placement, minutes, opts.staff ?? true);
 
   const amountCents = Math.round((placement.price_cents * minutes) / placement.slot_minutes);
 

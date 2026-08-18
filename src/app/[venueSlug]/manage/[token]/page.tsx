@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { getManageableBooking } from "@/lib/booking/manage";
+import { getManageableBooking, rescheduleOptions } from "@/lib/booking/manage";
 import { formatMoney } from "@/lib/money";
 import { CancelPanel } from "./cancel-panel";
+import { ReschedulePanel } from "./reschedule-panel";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Manage booking", robots: { index: false } };
@@ -37,6 +38,10 @@ export default async function ManageBookingPage({ params }: { params: Promise<Pa
   }
 
   const cancelled = booking.status === "cancelled";
+  // Only fetch open slots when the booking is actually changeable.
+  const reschedule = booking.cancellation.canCancel
+    ? await rescheduleOptions(booking.organizationId, booking.spaceId, booking.timezone)
+    : [];
   const statusTone = cancelled
     ? "text-clay-ink"
     : booking.status === "no_show"
@@ -94,11 +99,14 @@ export default async function ManageBookingPage({ params }: { params: Promise<Pa
             </Link>
           </div>
         ) : booking.cancellation.canCancel ? (
-          <div className="mt-6">
-            <CancelPanel slug={booking.venueSlug} token={token} />
-            <p className="mt-3 text-[0.8125rem] text-ink-3">
-              Free to cancel online — the slot will reopen for others.
-            </p>
+          <div className="mt-6 space-y-4">
+            <ReschedulePanel slug={booking.venueSlug} token={token} options={reschedule} />
+            <div>
+              <CancelPanel slug={booking.venueSlug} token={token} />
+              <p className="mt-3 text-[0.8125rem] text-ink-3">
+                Free to change or cancel online — a cancelled slot reopens for others.
+              </p>
+            </div>
           </div>
         ) : (
           <div className="mt-6 rounded-lg border border-rule bg-paper-2 p-4 text-[0.875rem] text-ink-2">
