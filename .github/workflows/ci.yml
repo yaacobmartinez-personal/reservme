@@ -78,6 +78,8 @@ jobs:
         run: npx tsx scripts/test-branding.ts
       - name: Customer self-service
         run: npx tsx scripts/test-self-service.ts
+      - name: Staff
+        run: npx tsx scripts/test-staff.ts
 
       # HTTP suites need the app running; start web + worker in the background.
       - name: Start app

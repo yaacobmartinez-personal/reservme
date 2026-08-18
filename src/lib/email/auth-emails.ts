@@ -47,6 +47,19 @@ function verifyEmailTemplate(name: string, url: string) {
   };
 }
 
+function inviteTemplate(orgName: string, url: string) {
+  return {
+    subject: `You're invited to help run ${orgName} on ReservMe`,
+    html: shell(
+      "You've been invited",
+      `<p style="margin:0 0 18px;color:${MUTE};font-size:15px;line-height:1.6;">You've been invited to help run <strong style="color:${INK};">${orgName}</strong> on ReservMe. Accept to get access to its bookings and schedule.</p>
+       ${button(url, "Accept invitation")}
+       <p style="margin:18px 0 0;color:${MUTE};font-size:12px;">If you weren't expecting this, you can ignore it.</p>`,
+    ),
+    text: `You've been invited to help run ${orgName} on ReservMe.\nAccept: ${url}\n`,
+  };
+}
+
 function resetPasswordTemplate(name: string, url: string) {
   return {
     subject: "Reset your password — ReservMe",
@@ -60,7 +73,7 @@ function resetPasswordTemplate(name: string, url: string) {
   };
 }
 
-export type AuthEmailKind = "verify" | "reset";
+export type AuthEmailKind = "verify" | "reset" | "invite";
 
 /**
  * Test-only capture. When AUTH_TEST_CAPTURE=1 (scripts/test-auth.ts, never prod)
@@ -82,6 +95,11 @@ export async function deliverAuthEmail(
   if (process.env.AUTH_TEST_CAPTURE === "1") {
     globalThis.__authCapture = { kind, to, url };
   }
-  const tpl = kind === "verify" ? verifyEmailTemplate(name, url) : resetPasswordTemplate(name, url);
+  const tpl =
+    kind === "verify"
+      ? verifyEmailTemplate(name, url)
+      : kind === "invite"
+        ? inviteTemplate(name, url)
+        : resetPasswordTemplate(name, url);
   return sendEmail({ to, subject: tpl.subject, html: tpl.html, text: tpl.text });
 }

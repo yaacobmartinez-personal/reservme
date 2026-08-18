@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { getBranding, getClosures, getVenueSettings, listOwnerSpaces } from "@/lib/owner";
+import { listInvitations, listMembers } from "@/lib/team";
 import { requireVenue } from "@/lib/tenancy";
 import { addClosure, removeClosure, updateVenueSettings } from "../actions";
 import { BrandingSection } from "./branding";
+import { TeamSection } from "./team";
 
 export const metadata: Metadata = { title: "Settings" };
 export const dynamic = "force-dynamic";
@@ -29,11 +31,13 @@ const TIMEZONES = [
 
 export default async function SettingsPage() {
   const venue = await requireVenue();
-  const [settings, closures, spaces, branding] = await Promise.all([
+  const [settings, closures, spaces, branding, members, invites] = await Promise.all([
     getVenueSettings(venue.organizationId),
     getClosures(venue.organizationId, venue.timezone),
     listOwnerSpaces(venue.organizationId),
     getBranding(venue.organizationId),
+    listMembers(venue.organizationId),
+    listInvitations(venue.organizationId),
   ]);
   if (!settings) notFound();
 
@@ -172,6 +176,13 @@ export default async function SettingsPage() {
           initial={branding}
           venueName={settings.name}
           tagline={settings.tagline}
+        />
+
+        <TeamSection
+          organizationId={venue.organizationId}
+          members={members}
+          invites={invites}
+          canManage={venue.role === "owner" || venue.role === "admin"}
         />
 
         {/* Closures */}

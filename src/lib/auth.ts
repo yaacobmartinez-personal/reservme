@@ -114,6 +114,15 @@ export const auth = betterAuth({
       // The venue owner is whoever created it; staff are invited in.
       creatorRole: "owner",
       allowUserToCreateOrganization: true,
+      // A pending invite is a capability; keep it short-lived.
+      invitationExpiresIn: 60 * 60 * 48, // 48h
+      async sendInvitationEmail(data) {
+        await deliverAuthEmail("invite", {
+          to: data.email,
+          name: data.organization.name,
+          url: appUrl(`/accept-invite?id=${data.id}`),
+        });
+      },
     }),
   ],
 });
