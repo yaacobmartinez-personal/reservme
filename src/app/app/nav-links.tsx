@@ -82,6 +82,20 @@ const LINKS = [
     ),
   },
   {
+    href: "/billing",
+    label: "Billing",
+    icon: (
+      <Icon
+        path={
+          <>
+            <rect x="2.5" y="4.5" width="15" height="11" rx="2" {...stroke} />
+            <path d="M2.5 8.5h15M6 12.5h3" {...stroke} />
+          </>
+        }
+      />
+    ),
+  },
+  {
     href: "/settings",
     label: "Settings",
     icon: (

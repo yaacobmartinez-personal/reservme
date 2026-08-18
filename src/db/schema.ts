@@ -290,6 +290,58 @@ export const reservation = pgTable(
   ],
 );
 
+/* ── Subscription billing (0004) ───────────────────────────────── */
+
+export type SubscriptionStatus =
+  | "trialing"
+  | "active"
+  | "past_due"
+  | "cancelled"
+  | "comped";
+
+export const subscription = pgTable("subscription", {
+  organizationId: text("organization_id")
+    .primaryKey()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  status: text("status").$type<SubscriptionStatus>().notNull().default("trialing"),
+  trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }).notNull(),
+  paidUntil: timestamp("paid_until", { withTimezone: true }),
+  provider: text("provider"),
+  providerRef: text("provider_ref"),
+  note: text("note"),
+  createdAt,
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type BillingPaymentStatus = "submitted" | "approved" | "rejected";
+
+export const billingPayment = pgTable(
+  "billing_payment",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    amountCents: integer("amount_cents").notNull(),
+    reference: text("reference").notNull(),
+    paidAt: timestamp("paid_at", { withTimezone: true }).notNull(),
+    status: text("status").$type<BillingPaymentStatus>().notNull().default("submitted"),
+    reviewedBy: text("reviewed_by").references(() => user.id, { onDelete: "set null" }),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    note: text("note"),
+    createdAt,
+  },
+  (t) => [index("billing_payment_org_idx").on(t.organizationId, t.createdAt)],
+);
+
+/** Platform-wide key/value settings (e.g. ReservMe's InstaPay QR details). */
+export const platformSetting = pgTable("platform_setting", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedBy: text("updated_by").references(() => user.id, { onDelete: "set null" }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export type PaymentMethod = "gcash_proof" | "paymongo" | "xendit" | "cash";
 export type PaymentStatus = "awaiting" | "approved" | "rejected" | "refunded";
 

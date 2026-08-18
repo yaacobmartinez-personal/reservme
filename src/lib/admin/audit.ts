@@ -8,7 +8,13 @@ export type AdminAction =
   | "admin.impersonation_started"
   | "admin.impersonation_ended"
   | "admin.granted_admin"
-  | "admin.revoked_admin";
+  | "admin.revoked_admin"
+  | "admin.approved_payment"
+  | "admin.rejected_payment"
+  | "admin.marked_paid"
+  | "admin.comped"
+  | "admin.cancelled_subscription"
+  | "admin.updated_billing_config";
 
 /**
  * Records a privileged action.

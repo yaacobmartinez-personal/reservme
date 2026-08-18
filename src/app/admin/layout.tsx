@@ -53,6 +53,7 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
           <nav aria-label="Platform" className="flex gap-1">
             {[
               { href: "/", label: "Tenants" },
+              { href: "/billing", label: "Billing" },
               { href: "/audit", label: "Audit log" },
             ].map((link) => (
               <Link

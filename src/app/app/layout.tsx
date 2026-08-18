@@ -2,7 +2,10 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { Wordmark } from "@/components/marketing/wordmark";
 import { auth } from "@/lib/auth";
+import { getBillingState } from "@/lib/billing";
+import { formatMoney } from "@/lib/money";
 import { currentVenue } from "@/lib/tenancy";
+import { BillingBanner } from "./billing-banner";
 import { AppNavLinks } from "./nav-links";
 import { SignOutButton } from "./sign-out-button";
 import { VerifyBanner } from "./verify-banner";
@@ -28,6 +31,39 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
     session?.user && !session.user.emailVerified ? (
       <VerifyBanner email={session.user.email} />
     ) : null;
+
+  // Billing nudge (skipped while impersonating — it's the venue's bill, not the
+  // admin's). Amount is null for the multi-site quote band.
+  const billingBanner = await (async () => {
+    if (venue.impersonatedBy) return null;
+    const state = await getBillingState(venue.organizationId);
+    const price = state.amountDueCents !== null ? formatMoney(state.amountDueCents, "PHP") : null;
+    if (state.pendingPayment) {
+      return <BillingBanner kind="review" message="Payment received — under review. We’ll confirm shortly." />;
+    }
+    if (state.dueNow) {
+      return (
+        <BillingBanner
+          kind="due"
+          message={
+            price
+              ? `Your free month has ended — pay ${price} to keep everything running.`
+              : "Your free month has ended — contact us to arrange billing."
+          }
+        />
+      );
+    }
+    if (state.status === "trialing" && (state.daysLeftInTrial ?? 99) <= 5) {
+      const left = state.daysLeftInTrial ?? 0;
+      return (
+        <BillingBanner
+          kind="trial"
+          message={`Your free month ends in ${left} day${left === 1 ? "" : "s"}${price ? ` — ${price}/mo after` : ""}.`}
+        />
+      );
+    }
+    return null;
+  })();
 
   const impersonation = venue.impersonatedBy ? (
     <div className="bg-clay text-paper">
@@ -74,6 +110,7 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
 
         {impersonation}
         {verifyBanner}
+        {billingBanner}
         {children}
       </div>
     </div>

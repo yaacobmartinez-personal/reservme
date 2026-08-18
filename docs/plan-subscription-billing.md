@@ -107,19 +107,26 @@ WHERE s.organization_id IS NULL
 ON CONFLICT DO NOTHING;
 ```
 
-## ReservMe's InstaPay QR — configuration (not per-venue)
+## ReservMe's InstaPay QR — platform-admin editable (owner decision)
 
-The subscription is paid to **one** ReservMe merchant QR, gated like the other
-integrations. `src/lib/billing.ts` reads:
-- `INSTAPAY_QR_URL` — hosted image of ReservMe's QR Ph code,
-- `INSTAPAY_PAYEE` — the account name shown ("ReservMe Inc."),
-- `INSTAPAY_ACCOUNT` — a human label ("BPI ••• 1234" / "GCash 0917…").
+The subscription is paid to **one** ReservMe merchant QR — **not per-venue** and
+**not env** (owner chose console-editable so it changes without a redeploy). A
+small `platform_setting(key, value, updated_by, updated_at)` key/value table (in
+`0004`) holds three keys, edited from an admin form (a section on `/admin/billing`,
+`requirePlatformAdmin` + audited `admin.updated_billing_config`):
+- `instapay_qr_url` — a hosted image URL of ReservMe's QR Ph code (a pasted URL,
+  no upload — we have no blob storage yet),
+- `instapay_payee` — the account name shown ("ReservMe Inc."),
+- `instapay_account` — a human label ("BPI ••• 1234" / "GCash 0917…").
 
-When unset (dev/pilot before a merchant account), the Billing page shows a
-"bank transfer details coming soon — contact us" fallback instead of the QR, and
-the rest of the page (status, amount) still works. `.env.example` documents them.
-A static QR Ph carries no amount, so the UI says "pay exactly ₱X, then enter your
-reference."
+`src/lib/billing.ts` exposes `instapayConfig()` reading those. Until set, the
+Billing page shows a "bank transfer details coming soon — contact us" fallback;
+status and amount still render. A static QR Ph carries no amount, so the UI says
+"pay exactly ₱X, then enter your reference."
+
+**Owner decisions (wireframe stage, 2026-08-18):** (1) proof is the **InstaPay
+reference number only** — no screenshot upload in v1; (2) the QR is **editable in
+the admin console** via `platform_setting`, not environment variables.
 
 ## Billing logic — `src/lib/billing.ts`
 

@@ -38,6 +38,14 @@ export async function POST() {
       ON CONFLICT (organization_id) DO NOTHING
     `;
 
+    // Start the free month at signup. One calendar month, matching the backfill
+    // in 0004 and what the billing page displays.
+    await sql`
+      INSERT INTO subscription (organization_id, status, trial_ends_at)
+      VALUES (${membership.organization_id}, 'trialing', now() + interval '1 month')
+      ON CONFLICT (organization_id) DO NOTHING
+    `;
+
     return NextResponse.json({ ok: true });
   } catch (error) {
     captureException(error, { where: "venue.init", userId: session.user.id });
