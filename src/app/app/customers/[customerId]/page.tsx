@@ -63,15 +63,26 @@ export default async function CustomerProfilePage({
   return (
     <main className="flex-1 py-8 sm:py-12">
       <div className="shell max-w-4xl">
-        <Link
-          href="/customers"
-          className="inline-flex items-center gap-1.5 text-[0.8125rem] text-ink-2 transition-colors duration-[--dur-fast] ease-out hover:text-ink"
-        >
-          <svg viewBox="0 0 20 20" aria-hidden="true" className="size-4">
-            <path d="M12 4l-6 6 6 6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          Customers
-        </Link>
+        <div className="flex items-center justify-between gap-3">
+          <Link
+            href="/customers"
+            className="inline-flex items-center gap-1.5 text-[0.8125rem] text-ink-2 transition-colors duration-[--dur-fast] ease-out hover:text-ink"
+          >
+            <svg viewBox="0 0 20 20" aria-hidden="true" className="size-4">
+              <path d="M12 4l-6 6 6 6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Customers
+          </Link>
+          <Link
+            href={`/calendar?newFor=${customer.id}`}
+            className="inline-flex items-center gap-1.5 rounded-pill bg-accent px-3.5 py-1.5 text-[0.8125rem] font-medium text-on-accent transition-colors duration-[--dur-fast] ease-out hover:bg-accent-hover"
+          >
+            <svg viewBox="0 0 20 20" aria-hidden="true" className="size-4">
+              <path d="M10 4v12M4 10h12" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+            </svg>
+            New booking
+          </Link>
+        </div>
 
         {/* Header */}
         <section className="mt-4 rounded-xl border border-rule bg-card p-5 shadow-plate sm:p-6">

@@ -9,7 +9,7 @@ import {
   noShowBooking,
   undoCheckInBooking,
 } from "@/app/app/booking-actions";
-import { blockOff, removeBlock } from "@/app/app/calendar-actions";
+import { blockOff, type CustomerHit, removeBlock } from "@/app/app/calendar-actions";
 import type { CalendarBlock, CalendarDay } from "@/lib/calendar";
 import { formatMoney } from "@/lib/money";
 import { BookingPanel, type PanelState } from "./booking-panel";
@@ -58,14 +58,26 @@ export function CalendarClient({
   date,
   today,
   currency,
+  initialBooking,
 }: {
   day: CalendarDay;
   date: string;
   today: string;
   currency: string;
+  /** When arriving from a customer's "New booking" link, open the panel prefilled. */
+  initialBooking?: CustomerHit | null;
 }) {
   const router = useRouter();
-  const [panel, setPanel] = useState<PanelState | null>(null);
+  const [panel, setPanel] = useState<PanelState | null>(
+    initialBooking && day.columns[0]
+      ? {
+          mode: "create",
+          spaceId: day.columns[0].id,
+          time: minToTime(day.openMin),
+          customer: initialBooking,
+        }
+      : null,
+  );
   const [detail, setDetail] = useState<CalendarBlock | null>(null);
   const [blocking, setBlocking] = useState(false);
 

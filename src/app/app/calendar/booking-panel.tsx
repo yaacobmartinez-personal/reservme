@@ -12,7 +12,7 @@ import {
 type Column = { id: string; name: string; slotMinutes: number };
 
 export type PanelState =
-  | { mode: "create"; spaceId: string; time: string }
+  | { mode: "create"; spaceId: string; time: string; customer?: CustomerHit }
   | {
       mode: "move";
       reservationId: string;
@@ -111,7 +111,7 @@ export function BookingPanel({
             </>
           ) : null}
 
-          {state.mode === "create" ? <CustomerPicker /> : null}
+          {state.mode === "create" ? <CustomerPicker initial={state.customer} /> : null}
 
           <label className={LABEL}>
             <span>Space</span>
@@ -212,10 +212,10 @@ export function BookingPanel({
  * Search-or-add customer. Writes either `customerId` (existing) or
  * `name`/`email`/`phone` (new) as hidden fields the action reads.
  */
-function CustomerPicker() {
+function CustomerPicker({ initial }: { initial?: CustomerHit }) {
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<CustomerHit[]>([]);
-  const [selected, setSelected] = useState<CustomerHit | null>(null);
+  const [selected, setSelected] = useState<CustomerHit | null>(initial ?? null);
   const [adding, setAdding] = useState(false);
   const [, startTransition] = useTransition();
 
