@@ -8,6 +8,7 @@ import {
   markNoShow,
   undoCheckIn,
 } from "@/lib/booking/reserve";
+import { promoteWaitlistForReservation } from "@/lib/booking/waitlist";
 import { requireVenue } from "@/lib/tenancy";
 
 /**
@@ -44,5 +45,7 @@ export async function cancelBooking(formData: FormData) {
   const venue = await requireVenue();
   const id = reservationId.parse(formData.get("reservationId"));
   await cancelReservation(venue.organizationId, id);
+  await promoteWaitlistForReservation(venue.organizationId, id);
   revalidatePath("/");
+  revalidatePath("/calendar");
 }

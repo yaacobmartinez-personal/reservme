@@ -80,6 +80,8 @@ jobs:
         run: npx tsx scripts/test-self-service.ts
       - name: Staff
         run: npx tsx scripts/test-staff.ts
+      - name: Waitlist
+        run: npx tsx scripts/test-waitlist.ts
 
       # HTTP suites need the app running; start web + worker in the background.
       - name: Start app

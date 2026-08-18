@@ -338,6 +338,31 @@ export const billingPayment = pgTable(
   (t) => [index("billing_payment_org_idx").on(t.organizationId, t.createdAt)],
 );
 
+export type WaitlistStatus = "waiting" | "notified" | "converted" | "expired";
+
+/** Waitlist entries for a taken slot (0007). */
+export const waitlist = pgTable(
+  "waitlist",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    spaceId: uuid("space_id")
+      .notNull()
+      .references(() => space.id, { onDelete: "cascade" }),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customer.id, { onDelete: "cascade" }),
+    status: text("status").$type<WaitlistStatus>().notNull().default("waiting"),
+    notifiedAt: timestamp("notified_at", { withTimezone: true }),
+    createdAt,
+  },
+  (t) => [index("waitlist_slot_idx").on(t.spaceId, t.startsAt, t.status)],
+);
+
 /** Platform-wide key/value settings (e.g. ReservMe's InstaPay QR details). */
 export const platformSetting = pgTable("platform_setting", {
   key: text("key").primaryKey(),

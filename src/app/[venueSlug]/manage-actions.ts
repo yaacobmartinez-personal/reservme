@@ -6,6 +6,7 @@ import { clientIp } from "@/lib/abuse";
 import { getBookingForCancel } from "@/lib/booking/manage";
 import { cancelReservation, moveReservation } from "@/lib/booking/reserve";
 import { BookingError } from "@/lib/booking/errors";
+import { promoteWaitlistForReservation } from "@/lib/booking/waitlist";
 import { rateLimit } from "@/lib/rate-limit";
 
 /**
@@ -34,6 +35,8 @@ export async function cancelBooking(formData: FormData): Promise<CancelResult> {
 
   try {
     await cancelReservation(booking.organizationId, booking.reservationId);
+    // The freed slot may have someone waiting — notify the first in line.
+    await promoteWaitlistForReservation(booking.organizationId, booking.reservationId);
   } catch (error) {
     // Already gone (e.g. a double click) — the page will render the cancelled
     // state, which is the outcome the customer wanted anyway.

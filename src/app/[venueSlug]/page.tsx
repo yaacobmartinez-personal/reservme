@@ -6,6 +6,7 @@ import { sweepExpiredHolds } from "@/lib/booking/reserve";
 import { formatMoney } from "@/lib/money";
 import { getLocalDates, getVenueBySlug, getVenueSpaces } from "@/lib/venue";
 import { BookingForm } from "./booking-form";
+import { WaitlistJoin } from "./waitlist-join";
 
 export const dynamic = "force-dynamic";
 
@@ -191,6 +192,18 @@ export default async function VenuePage({
             />
           </div>
         </div>
+
+        <WaitlistJoin
+          venueSlug={venue.slug}
+          spaceId={activeSpace.id}
+          takenSlots={slots
+            .filter((s) => s.reason === "taken")
+            .map((s) => ({
+              time: s.label,
+              startsAtISO: s.startsAt.toISOString(),
+              endsAtISO: s.endsAt.toISOString(),
+            }))}
+        />
 
         {/* Shared sessions */}
         {sessions.length > 0 ? (

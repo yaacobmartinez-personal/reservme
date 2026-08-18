@@ -7,6 +7,11 @@ import { AcceptPanel } from "./accept-panel";
 export const metadata: Metadata = { title: "Accept invitation" };
 export const dynamic = "force-dynamic";
 
+/** Kept out of the component body so the render stays pure (no Date.now there). */
+function notExpired(expiresAt: Date): boolean {
+  return expiresAt.getTime() > Date.now();
+}
+
 export default async function AcceptInvitePage({
   searchParams,
 }: {
@@ -14,8 +19,7 @@ export default async function AcceptInvitePage({
 }) {
   const { id } = await searchParams;
   const invite = id ? await getInvitationView(id) : null;
-  const valid =
-    invite && invite.status === "pending" && invite.expiresAt.getTime() > Date.now();
+  const valid = invite !== null && invite.status === "pending" && notExpired(invite.expiresAt);
 
   return (
     <main className="flex flex-1 items-center justify-center py-16">
