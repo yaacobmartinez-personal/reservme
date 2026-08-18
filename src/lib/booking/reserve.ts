@@ -89,16 +89,7 @@ async function upsertCustomer(
   });
 }
 
-/**
- * Holds a whole space for a period.
- *
- * There is no "is this slot free?" check before the insert, and adding one
- * would not make this safer — between the check and the write another
- * request can commit. Instead the insert is attempted and Postgres decides:
- * `reservation_no_overlap` lets exactly one of any set of racing writes
- * through and raises 23P01 for the rest, which becomes a clean `slot_taken`.
- */
-export async function reserveSpace(input: {
+export type RentalInput = {
   organizationId: string;
   spaceId: string;
   startsAt: Date;
@@ -106,38 +97,36 @@ export async function reserveSpace(input: {
   customer: CustomerDetails;
   partySize?: number;
   notes?: string;
-}): Promise<Reservation> {
-  const {
-    organizationId,
-    spaceId,
-    startsAt,
-    endsAt,
-    customer,
-    partySize = 1,
-    notes,
-  } = input;
+};
 
-  // Re-derive, on the write, everything the availability read path shows.
-  //
-  // Availability is a prediction the client is free to ignore or to replay
-  // stale: startsAt/endsAt arrive as hidden form fields. The database only
-  // enforces *overlap* (reservation_no_overlap); opening hours, notice window,
-  // booking horizon, closures, the slot grid and a shared session sitting on
-  // the court are enforced here or nowhere. Without this a crafted request
-  // holds a slot in the past, at 3am, for thirty days, or over an open-play
-  // session — see scripts/_qa.ts, which probes exactly these.
-  const [space] = await sql<
-    {
-      price_cents: number;
-      slot_minutes: number;
-      is_active: boolean;
-      too_soon: boolean;
-      too_far: boolean;
-      within_hours: boolean;
-      closed: boolean;
-      session_conflict: boolean;
-    }[]
-  >`
+type Placement = {
+  price_cents: number;
+  slot_minutes: number;
+  is_active: boolean;
+  too_soon: boolean;
+  too_far: boolean;
+  within_hours: boolean;
+  closed: boolean;
+  session_conflict: boolean;
+};
+
+/**
+ * Re-derives, from the database, everything that decides whether a rental may
+ * sit on (spaceId, startsAt–endsAt): price, grid step, active flag, opening
+ * hours, closures, the notice/horizon windows, and a shared session already on
+ * the court. A prediction the write still re-checks — availability is never
+ * authoritative. Returns null when the space isn't this org's.
+ *
+ * Shared by the public path (reserveSpace), the staff path, and moveReservation
+ * so all three read identical facts; only the *policy* they enforce differs.
+ */
+async function derivePlacement(
+  organizationId: string,
+  spaceId: string,
+  startsAt: Date,
+  endsAt: Date,
+): Promise<Placement | null> {
+  const [row] = await sql<Placement[]>`
     SELECT
       s.price_cents,
       s.slot_minutes,
@@ -171,23 +160,70 @@ export async function reserveSpace(input: {
     JOIN venue v ON v.organization_id = s.organization_id
     WHERE s.id = ${spaceId}::uuid AND s.organization_id = ${organizationId}
   `;
+  return row ?? null;
+}
 
-  if (!space) throw new BookingError("not_found");
-  if (!space.is_active) throw new BookingError("space_inactive");
+/**
+ * Turns a placement into a go / no-go. The `staff` path relaxes only *policy* —
+ * the notice window, the booking horizon, and the one-slot length limit (staff
+ * may book N consecutive slots) — and keeps every *physical* guarantee: the
+ * space must be active, within opening hours, not closed, and not on top of a
+ * shared session. Overlap itself is enforced by the constraint on write.
+ * Physical invariants are never overridable, whoever is booking.
+ */
+function validatePlacement(placement: Placement, minutes: number, staff: boolean): void {
+  if (!placement.is_active) throw new BookingError("space_inactive");
+  // Public: exactly one grid step. Staff: any positive whole number of steps.
+  const lengthOk = staff
+    ? minutes > 0 && minutes % placement.slot_minutes === 0
+    : minutes > 0 && minutes === placement.slot_minutes;
+  if (!lengthOk) throw new BookingError("bad_slot");
+  if (placement.closed) throw new BookingError("closed");
+  // A rental cannot be sold on top of a shared session's footprint.
+  if (placement.session_conflict) throw new BookingError("slot_taken");
+  if (!placement.within_hours) throw new BookingError("outside_hours");
+  if (!staff && placement.too_soon) throw new BookingError("too_soon");
+  if (!staff && placement.too_far) throw new BookingError("too_far_ahead");
+}
+
+/**
+ * Holds a whole space for a period.
+ *
+ * There is no "is this slot free?" check before the insert, and adding one
+ * would not make this safer — between the check and the write another
+ * request can commit. Instead the insert is attempted and Postgres decides:
+ * `reservation_no_overlap` lets exactly one of any set of racing writes
+ * through and raises 23P01 for the rest, which becomes a clean `slot_taken`.
+ *
+ * `opts.staff` books on behalf of the venue (calendar manual entry / walk-in):
+ * it relaxes the notice window, the horizon, and the single-slot length so a
+ * walk-in books now and a rental can span slots — physical guarantees are
+ * unchanged. Public callers omit it.
+ */
+export async function reserveSpace(
+  input: RentalInput,
+  opts: { staff?: boolean } = {},
+): Promise<Reservation> {
+  const {
+    organizationId,
+    spaceId,
+    startsAt,
+    endsAt,
+    customer,
+    partySize = 1,
+    notes,
+  } = input;
+
+  // Re-derive every rule on the write; availability is only a prediction the
+  // client may ignore or replay stale. The helpers are shared with the staff
+  // path and moveReservation, so all three enforce identical physical rules.
+  const placement = await derivePlacement(organizationId, spaceId, startsAt, endsAt);
+  if (!placement) throw new BookingError("not_found");
 
   const minutes = Math.round((endsAt.getTime() - startsAt.getTime()) / 60000);
+  validatePlacement(placement, minutes, opts.staff ?? false);
 
-  // A well-formed slot is exactly one grid step long; anything else (a 7-minute
-  // range, a 30-day range, ends before starts) is not something we ever offered.
-  if (minutes <= 0 || minutes !== space.slot_minutes) throw new BookingError("bad_slot");
-  if (space.closed) throw new BookingError("closed");
-  // A rental cannot be sold on top of a shared session's footprint.
-  if (space.session_conflict) throw new BookingError("slot_taken");
-  if (!space.within_hours) throw new BookingError("outside_hours");
-  if (space.too_soon) throw new BookingError("too_soon");
-  if (space.too_far) throw new BookingError("too_far_ahead");
-
-  const amountCents = Math.round((space.price_cents * minutes) / space.slot_minutes);
+  const amountCents = Math.round((placement.price_cents * minutes) / placement.slot_minutes);
 
   // Deliberately outside the reservation write. Holding a lock on the customer
   // row while contending for the slot is what turns a lost race into a
@@ -474,4 +510,95 @@ export async function markNoShow(organizationId: string, id: string) {
 
     return row.id;
   });
+}
+
+/**
+ * Books a rental on behalf of the venue — the calendar's manual entry and
+ * walk-ins. Identical to reserveSpace but with staff policy: bookable now (no
+ * notice window), beyond the public horizon, and spanning N consecutive slots.
+ * Every physical guarantee (overlap, closed, session, active, opening hours)
+ * still holds, so a staff booking can no more double-book than a public one.
+ */
+export async function bookRentalAsStaff(input: RentalInput): Promise<Reservation> {
+  return reserveSpace(input, { staff: true });
+}
+
+/**
+ * Moves a rental to a new space and/or start time (calendar reschedule). Keeps
+ * the same duration, repriced at the destination space's rate. It goes through
+ * the same advisory lock + exclusion constraint as a fresh booking, so a move
+ * that would overlap is refused (slot_taken) rather than forced — never a bare
+ * UPDATE that trusts availability. Staff policy: notice/horizon don't apply.
+ */
+export async function moveReservation(
+  organizationId: string,
+  id: string,
+  newSpaceId: string,
+  newStartsAt: Date,
+): Promise<Reservation> {
+  const [existing] = await sql<{ starts_at: Date; ends_at: Date }[]>`
+    SELECT starts_at, ends_at
+    FROM reservation
+    WHERE id = ${id}::uuid
+      AND organization_id = ${organizationId}
+      AND kind = 'rental'
+      AND status IN ('held', 'confirmed')
+  `;
+  if (!existing) throw new BookingError("not_found");
+
+  const durationMs = existing.ends_at.getTime() - existing.starts_at.getTime();
+  const newEndsAt = new Date(newStartsAt.getTime() + durationMs);
+  const minutes = Math.round(durationMs / 60000);
+
+  const placement = await derivePlacement(organizationId, newSpaceId, newStartsAt, newEndsAt);
+  if (!placement) throw new BookingError("not_found");
+  validatePlacement(placement, minutes, true);
+
+  const amountCents = Math.round((placement.price_cents * minutes) / placement.slot_minutes);
+
+  try {
+    return await withContentionRetry(async () =>
+      sql.begin(async (tx) => {
+        // Same per-space serialisation as a fresh booking — lock the space we're
+        // moving *into* before touching the constraint.
+        await tx`SELECT pg_advisory_xact_lock(hashtextextended(${newSpaceId}, 0))`;
+
+        const [row] = await tx<
+          {
+            id: string;
+            reference: string;
+            starts_at: Date;
+            ends_at: Date;
+            status: string;
+            amount_cents: number;
+            hold_expires_at: Date | null;
+          }[]
+        >`
+          UPDATE reservation
+             SET space_id = ${newSpaceId}::uuid,
+                 starts_at = ${newStartsAt},
+                 ends_at = ${newEndsAt},
+                 amount_cents = ${amountCents}
+           WHERE id = ${id}::uuid
+             AND organization_id = ${organizationId}
+             AND status IN ('held', 'confirmed')
+          RETURNING id, reference, starts_at, ends_at, status, amount_cents, hold_expires_at
+        `;
+        if (!row) throw new BookingError("not_found");
+
+        return {
+          id: row.id,
+          reference: row.reference,
+          startsAt: row.starts_at,
+          endsAt: row.ends_at,
+          status: row.status,
+          amountCents: row.amount_cents,
+          holdExpiresAt: row.hold_expires_at,
+        };
+      }),
+    );
+  } catch (error) {
+    if (isSlotTakenError(error)) throw new BookingError("slot_taken");
+    throw error;
+  }
 }

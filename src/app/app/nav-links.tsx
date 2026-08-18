@@ -36,6 +36,21 @@ const LINKS = [
     ),
   },
   {
+    href: "/calendar",
+    label: "Calendar",
+    icon: (
+      <Icon
+        path={
+          <>
+            <rect x="3" y="4" width="14" height="13" rx="2" {...stroke} />
+            <path d="M3 8h14M7 3v3M13 3v3" {...stroke} />
+            <rect x="6" y="10.5" width="3" height="3.5" rx="0.5" {...stroke} />
+          </>
+        }
+      />
+    ),
+  },
+  {
     href: "/customers",
     label: "Customers",
     icon: (

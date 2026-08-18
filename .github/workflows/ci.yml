@@ -68,6 +68,8 @@ jobs:
         run: npx tsx scripts/test-analytics.ts
       - name: CRM
         run: npx tsx scripts/test-crm.ts
+      - name: Calendar
+        run: npx tsx scripts/test-calendar.ts
 
       # HTTP suites need the app running; start web + worker in the background.
       - name: Start app
