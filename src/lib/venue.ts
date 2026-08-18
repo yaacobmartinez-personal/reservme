@@ -9,6 +9,8 @@ export type PublicVenue = {
   timezone: string;
   currency: string;
   theme: string;
+  logo: string | null;
+  coverUrl: string | null;
   cancellationMode: string;
   cancellationGraceHours: number;
   refundTerms: string | null;
@@ -37,6 +39,8 @@ export async function getVenueBySlug(slug: string): Promise<PublicVenue | null> 
       timezone: string;
       currency: string;
       theme: string;
+      logo: string | null;
+      cover_url: string | null;
       cancellation_mode: string;
       cancellation_grace_hours: number;
       refund_terms: string | null;
@@ -44,8 +48,8 @@ export async function getVenueBySlug(slug: string): Promise<PublicVenue | null> 
       suspended_at: Date | null;
     }[]
   >`
-    SELECT o.id AS organization_id, o.name, o.slug,
-           v.tagline, v.address, v.timezone, v.currency, v.theme,
+    SELECT o.id AS organization_id, o.name, o.slug, o.logo,
+           v.tagline, v.address, v.timezone, v.currency, v.theme, v.cover_url,
            v.cancellation_mode, v.cancellation_grace_hours, v.refund_terms,
            v.gcash_name, v.suspended_at
     FROM organization o
@@ -64,6 +68,8 @@ export async function getVenueBySlug(slug: string): Promise<PublicVenue | null> 
     timezone: row.timezone,
     currency: row.currency,
     theme: row.theme,
+    logo: row.logo,
+    coverUrl: row.cover_url,
     cancellationMode: row.cancellation_mode,
     cancellationGraceHours: row.cancellation_grace_hours,
     refundTerms: row.refund_terms,

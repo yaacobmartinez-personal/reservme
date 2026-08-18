@@ -85,13 +85,30 @@ export default async function VenuePage({
   };
 
   return (
-    <main className="flex-1 py-10 sm:py-16">
+    <main data-brand={venue.theme} className="flex-1 py-10 sm:py-16">
       <div className="shell max-w-3xl">
+        {/* Cover photo */}
+        {venue.coverUrl ? (
+          <div className="mb-6 overflow-hidden rounded-xl border border-rule">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={venue.coverUrl} alt="" className="h-40 w-full object-cover sm:h-52" />
+          </div>
+        ) : null}
+
         {/* Venue identity */}
         <header className="flex items-center gap-4">
-          <span className="grid size-14 shrink-0 place-items-center rounded-pill bg-accent-soft font-display text-2xl text-accent-ink">
-            {venue.name.charAt(0)}
-          </span>
+          {venue.logo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={venue.logo}
+              alt={venue.name}
+              className="size-14 shrink-0 rounded-pill border border-rule object-cover"
+            />
+          ) : (
+            <span className="grid size-14 shrink-0 place-items-center rounded-pill bg-accent-soft font-display text-2xl text-accent-ink">
+              {venue.name.charAt(0)}
+            </span>
+          )}
           <div className="min-w-0">
             <h1 className="truncate text-head">{venue.name}</h1>
             {venue.tagline ? (

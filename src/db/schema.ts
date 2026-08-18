@@ -139,6 +139,8 @@ export const venue = pgTable("venue", {
   refundTerms: text("refund_terms"),
   gcashQrUrl: text("gcash_qr_url"),
   gcashName: text("gcash_name"),
+  /** Branding (0005): a cover image as a data URL. Logo is on organization. */
+  coverUrl: text("cover_url"),
   createdAt,
 });
 

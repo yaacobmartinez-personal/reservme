@@ -1,5 +1,21 @@
 import { sql } from "@/db";
 import type { CancellationMode } from "@/db/schema";
+import { type Branding, isTheme } from "@/lib/branding";
+
+/** Current branding (theme/logo/cover) for the owner settings form. */
+export async function getBranding(organizationId: string): Promise<Branding> {
+  const [row] = await sql<{ logo: string | null; theme: string; cover_url: string | null }[]>`
+    SELECT o.logo, v.theme, v.cover_url
+    FROM organization o
+    JOIN venue v ON v.organization_id = o.id
+    WHERE o.id = ${organizationId}
+  `;
+  return {
+    theme: isTheme(row?.theme) ? row.theme : "pine",
+    logo: row?.logo ?? null,
+    coverUrl: row?.cover_url ?? null,
+  };
+}
 
 /**
  * Owner-side reads. Unlike src/lib/venue.ts (which serves the public booking

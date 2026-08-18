@@ -74,6 +74,8 @@ jobs:
         run: npx tsx scripts/test-auth.ts
       - name: Billing
         run: npx tsx scripts/test-billing.ts
+      - name: Branding
+        run: npx tsx scripts/test-branding.ts
 
       # HTTP suites need the app running; start web + worker in the background.
       - name: Start app

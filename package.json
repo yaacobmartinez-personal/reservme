@@ -23,7 +23,8 @@
     "test:crm": "tsx --env-file=.env.local scripts/test-crm.ts",
     "test:calendar": "tsx --env-file=.env.local scripts/test-calendar.ts",
     "test:auth": "tsx --env-file=.env.local scripts/test-auth.ts",
-    "test:billing": "tsx --env-file=.env.local scripts/test-billing.ts"
+    "test:billing": "tsx --env-file=.env.local scripts/test-billing.ts",
+    "test:branding": "tsx --env-file=.env.local scripts/test-branding.ts"
   },
   "dependencies": {
     "@sentry/node": "^10.70.0",

@@ -237,3 +237,49 @@ h3 {
     transparent
   );
 }
+
+/* ─────────────────────────────────────────────────────────────────
+   Venue brand themes (0005). A public page wraps itself in
+   <div data-brand="…"> and every accent-* utility re-themes at once.
+   "pine" is the default and needs no block.
+   ───────────────────────────────────────────────────────────────── */
+[data-brand="ocean"] {
+  --color-accent: oklch(50% 0.108 236);
+  --color-accent-hover: oklch(44.5% 0.104 236);
+  --color-accent-ink: oklch(34% 0.078 236);
+  --color-accent-soft: oklch(95.2% 0.03 236);
+  --color-accent-line: oklch(88% 0.05 236);
+  --color-on-accent: oklch(98.6% 0.014 236);
+}
+[data-brand="violet"] {
+  --color-accent: oklch(48% 0.132 296);
+  --color-accent-hover: oklch(42.5% 0.126 296);
+  --color-accent-ink: oklch(34% 0.095 296);
+  --color-accent-soft: oklch(95.5% 0.035 296);
+  --color-accent-line: oklch(89% 0.055 296);
+  --color-on-accent: oklch(98.6% 0.016 296);
+}
+[data-brand="sunset"] {
+  --color-accent: oklch(52% 0.15 48);
+  --color-accent-hover: oklch(46.5% 0.145 48);
+  --color-accent-ink: oklch(36% 0.11 48);
+  --color-accent-soft: oklch(95.6% 0.032 58);
+  --color-accent-line: oklch(89% 0.06 48);
+  --color-on-accent: oklch(98.6% 0.016 70);
+}
+[data-brand="rose"] {
+  --color-accent: oklch(52% 0.15 12);
+  --color-accent-hover: oklch(46.5% 0.145 12);
+  --color-accent-ink: oklch(36% 0.11 12);
+  --color-accent-soft: oklch(95.6% 0.035 12);
+  --color-accent-line: oklch(89% 0.06 12);
+  --color-on-accent: oklch(98.6% 0.016 12);
+}
+[data-brand="slate"] {
+  --color-accent: oklch(42% 0.03 250);
+  --color-accent-hover: oklch(37% 0.03 250);
+  --color-accent-ink: oklch(30% 0.025 250);
+  --color-accent-soft: oklch(95% 0.008 250);
+  --color-accent-line: oklch(88% 0.014 250);
+  --color-on-accent: oklch(98.6% 0.006 250);
+}

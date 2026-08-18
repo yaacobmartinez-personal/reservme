@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { getClosures, getVenueSettings, listOwnerSpaces } from "@/lib/owner";
+import { getBranding, getClosures, getVenueSettings, listOwnerSpaces } from "@/lib/owner";
 import { requireVenue } from "@/lib/tenancy";
 import { addClosure, removeClosure, updateVenueSettings } from "../actions";
+import { BrandingSection } from "./branding";
 
 export const metadata: Metadata = { title: "Settings" };
 export const dynamic = "force-dynamic";
@@ -28,10 +29,11 @@ const TIMEZONES = [
 
 export default async function SettingsPage() {
   const venue = await requireVenue();
-  const [settings, closures, spaces] = await Promise.all([
+  const [settings, closures, spaces, branding] = await Promise.all([
     getVenueSettings(venue.organizationId),
     getClosures(venue.organizationId, venue.timezone),
     listOwnerSpaces(venue.organizationId),
+    getBranding(venue.organizationId),
   ]);
   if (!settings) notFound();
 
@@ -165,6 +167,12 @@ export default async function SettingsPage() {
             </Button>
           </form>
         </section>
+
+        <BrandingSection
+          initial={branding}
+          venueName={settings.name}
+          tagline={settings.tagline}
+        />
 
         {/* Closures */}
         <section className="mt-6 rounded-xl border border-rule bg-card p-6 shadow-float sm:p-8">
