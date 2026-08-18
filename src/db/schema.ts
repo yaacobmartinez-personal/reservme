@@ -283,6 +283,8 @@ export const reservation = pgTable(
     checkedInAt: timestamp("checked_in_at", { withTimezone: true }),
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
     reference: text("reference").notNull().unique(),
+    /** Unguessable capability behind the customer "manage booking" link (0006). */
+    manageToken: uuid("manage_token").notNull().defaultRandom(),
     notes: text("notes"),
     createdAt,
   },

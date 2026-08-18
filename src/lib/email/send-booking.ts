@@ -26,6 +26,7 @@ async function loadBookingEmailData(
       space_name: string;
       when_label: string;
       reference: string;
+      manage_token: string;
       amount_cents: number;
       currency: string;
       address: string | null;
@@ -36,7 +37,7 @@ async function loadBookingEmailData(
            to_char(r.starts_at AT TIME ZONE v.timezone, 'Dy DD Mon, HH24:MI')
              || '–' ||
              to_char(r.ends_at AT TIME ZONE v.timezone, 'HH24:MI') AS when_label,
-           r.reference, r.amount_cents, v.currency, v.address
+           r.reference, r.manage_token, r.amount_cents, v.currency, v.address
     FROM reservation r
     JOIN organization o ON o.id = r.organization_id
     JOIN venue v        ON v.organization_id = o.id
@@ -60,7 +61,7 @@ async function loadBookingEmailData(
       amountCents: row.amount_cents,
       currency: row.currency,
       address: row.address,
-      manageUrl: apexUrl(`/${row.venue_slug}`),
+      manageUrl: apexUrl(`/${row.venue_slug}/manage/${row.manage_token}`),
     },
   };
 }
