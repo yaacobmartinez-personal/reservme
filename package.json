@@ -21,7 +21,8 @@
     "db:restore": "sh scripts/restore.sh",
     "test:analytics": "tsx --env-file=.env.local scripts/test-analytics.ts",
     "test:crm": "tsx --env-file=.env.local scripts/test-crm.ts",
-    "test:calendar": "tsx --env-file=.env.local scripts/test-calendar.ts"
+    "test:calendar": "tsx --env-file=.env.local scripts/test-calendar.ts",
+    "test:auth": "tsx --env-file=.env.local scripts/test-auth.ts"
   },
   "dependencies": {
     "@sentry/node": "^10.70.0",

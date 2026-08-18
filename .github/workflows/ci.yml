@@ -70,6 +70,8 @@ jobs:
         run: npx tsx scripts/test-crm.ts
       - name: Calendar
         run: npx tsx scripts/test-calendar.ts
+      - name: Auth hardening
+        run: npx tsx scripts/test-auth.ts
 
       # HTTP suites need the app running; start web + worker in the background.
       - name: Start app

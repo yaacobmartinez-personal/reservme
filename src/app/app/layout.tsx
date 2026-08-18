@@ -1,8 +1,11 @@
+import { headers } from "next/headers";
 import Link from "next/link";
 import { Wordmark } from "@/components/marketing/wordmark";
+import { auth } from "@/lib/auth";
 import { currentVenue } from "@/lib/tenancy";
 import { AppNavLinks } from "./nav-links";
 import { SignOutButton } from "./sign-out-button";
+import { VerifyBanner } from "./verify-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +18,16 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
   const venue = await currentVenue();
 
   if (!venue) return <>{children}</>;
+
+  // Soft email-verification nudge. Skipped while a platform admin is
+  // impersonating — that banner would be about the admin, not the venue.
+  const session = venue.impersonatedBy
+    ? null
+    : await auth.api.getSession({ headers: await headers() });
+  const verifyBanner =
+    session?.user && !session.user.emailVerified ? (
+      <VerifyBanner email={session.user.email} />
+    ) : null;
 
   const impersonation = venue.impersonatedBy ? (
     <div className="bg-clay text-paper">
@@ -60,6 +73,7 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
         </div>
 
         {impersonation}
+        {verifyBanner}
         {children}
       </div>
     </div>

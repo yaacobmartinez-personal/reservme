@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
@@ -129,10 +130,20 @@ export function LoginForm({ startOnSignup = false }: { startOnSignup?: boolean }
         </label>
 
         <label className="grid gap-1.5">
-          <span className="text-[0.875rem] text-ink-2">
-            Password{" "}
-            {mode === "signup" ? (
-              <span className="text-ink-3">(at least 10 characters)</span>
+          <span className="flex items-baseline justify-between gap-2 text-[0.875rem] text-ink-2">
+            <span>
+              Password{" "}
+              {mode === "signup" ? (
+                <span className="text-ink-3">(at least 10 characters)</span>
+              ) : null}
+            </span>
+            {mode === "signin" ? (
+              <Link
+                href="/forgot-password"
+                className="text-[0.8125rem] font-normal text-ink-3 hover:text-accent"
+              >
+                Forgot password?
+              </Link>
             ) : null}
           </span>
           <input

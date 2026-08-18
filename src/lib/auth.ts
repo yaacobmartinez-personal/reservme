@@ -4,6 +4,7 @@ import { organization } from "better-auth/plugins";
 import { db, schema } from "@/db";
 import { serverEnv } from "@/lib/env";
 import { adminUrl, APP_HOST, appUrl } from "@/lib/env";
+import { deliverAuthEmail } from "@/lib/email/auth-emails";
 import { log } from "@/lib/log";
 
 /**
@@ -61,6 +62,25 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     minPasswordLength: 10,
+    // A locked-out owner needs a way back in. The link is single-use and expires
+    // in an hour (Better Auth default); the request response is deliberately
+    // generic (see the forgot-password page) so it can't confirm who has an
+    // account here.
+    sendResetPassword: async ({ user, url }) => {
+      await deliverAuthEmail("reset", { to: user.email, name: user.name, url });
+    },
+  },
+
+  emailVerification: {
+    // Send on sign-up, but do NOT require verification to use the app: the
+    // sign-up flow creates the venue with the session it gets back, and gating
+    // that behind a clicked link would 401 every new owner mid-onboarding. We
+    // nudge with an in-app banner instead (soft verification).
+    sendOnSignUp: true,
+    autoSignInAfterVerification: true,
+    sendVerificationEmail: async ({ user, url }) => {
+      await deliverAuthEmail("verify", { to: user.email, name: user.name, url });
+    },
   },
 
   advanced: {
@@ -68,6 +88,24 @@ export const auth = betterAuth({
     defaultCookieAttributes: {
       sameSite: "lax",
       secure: APP_HOST.includes("localhost") === false,
+    },
+  },
+
+  // On everywhere (not just prod) so dev/CI exercise it too. The global limit is
+  // generous — auth endpoints include getSession, hit on every navigation — but
+  // the two unauthenticated, abusable POSTs are held tight: a reset request
+  // can't be used to email-bomb an address, and sign-in can't be brute-forced.
+  // Memory store is fine for a single instance; switch to database storage when
+  // we run more than one.
+  rateLimit: {
+    enabled: true,
+    window: 60,
+    max: 120,
+    customRules: {
+      "/request-password-reset": { window: 300, max: 3 },
+      "/forget-password": { window: 300, max: 3 },
+      "/sign-in/email": { window: 60, max: 10 },
+      "/reset-password": { window: 300, max: 10 },
     },
   },
 
