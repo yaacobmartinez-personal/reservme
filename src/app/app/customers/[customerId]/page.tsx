@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { removeCustomerTag } from "@/app/app/customer-actions";
+import { grantToCustomer } from "@/app/app/memberships/actions";
 import { type CustomerBooking, getCustomer } from "@/lib/customers";
+import { listCustomerHoldings, listPlans } from "@/lib/memberships";
 import { formatMoney } from "@/lib/money";
 import { requireVenue } from "@/lib/tenancy";
 import { AddNoteForm, AddTagForm, ContactEditor } from "./profile-forms";
@@ -46,6 +48,12 @@ export default async function CustomerProfilePage({
   const { customerId } = await params;
   const customer = await getCustomer(venue.organizationId, customerId, venue.timezone);
   if (!customer) notFound();
+
+  const [holdings, plans] = await Promise.all([
+    listCustomerHoldings(venue.organizationId, customer.id),
+    listPlans(venue.organizationId),
+  ]);
+  const activePlans = plans.filter((p) => p.active);
 
   const memberSince = new Intl.DateTimeFormat("en-PH", {
     month: "short",
@@ -145,6 +153,75 @@ export default async function CustomerProfilePage({
               Last visit {fmtDateTime(customer.lastVisit, venue.timezone)}
             </p>
           ) : null}
+        </section>
+
+        {/* Passes & memberships */}
+        <section className="mt-6 rounded-xl border border-rule bg-card p-5 shadow-plate sm:p-6">
+          <h2 className="text-[0.9375rem] font-semibold">Passes &amp; memberships</h2>
+
+          {holdings.length > 0 ? (
+            <ul className="mt-3 flex flex-wrap gap-2">
+              {holdings.map((h) => (
+                <li
+                  key={h.id}
+                  className={`rounded-lg border px-3 py-2 text-[0.8125rem] ${
+                    h.status === "active"
+                      ? "border-accent-line bg-accent-soft text-accent-ink"
+                      : "border-rule bg-paper-2 text-ink-3"
+                  }`}
+                >
+                  <span className="font-medium">{h.planName}</span>
+                  <span className="ml-2">
+                    {h.creditsRemaining} credit{h.creditsRemaining === 1 ? "" : "s"}
+                    {h.benefitDiscountPct != null ? ` · ${h.benefitDiscountPct}% off` : ""}
+                  </span>
+                  {h.status !== "active" ? <span className="ml-2">· {h.status}</span> : null}
+                  {h.expiresAt ? (
+                    <span className="ml-2 opacity-80">
+                      · expires {fmtDateTime(h.expiresAt, venue.timezone)}
+                    </span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-2 text-[0.875rem] text-ink-3">No passes or memberships yet.</p>
+          )}
+
+          {activePlans.length > 0 ? (
+            <form action={grantToCustomer} className="mt-4 flex flex-wrap items-center gap-2">
+              <input type="hidden" name="customerId" value={customer.id} />
+              <select
+                name="planId"
+                required
+                defaultValue=""
+                className="h-10 rounded-sm border border-rule bg-paper-2 px-3 text-[0.875rem]"
+              >
+                <option value="" disabled>
+                  Choose a plan…
+                </option>
+                {activePlans.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} — {formatMoney(p.priceCents, venue.currency)}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="submit"
+                className="h-10 whitespace-nowrap rounded-pill bg-accent px-4 text-[0.875rem] font-medium text-on-accent hover:bg-accent-hover"
+              >
+                Grant
+              </button>
+            </form>
+          ) : (
+            <p className="mt-3 text-[0.8125rem] text-ink-3">
+              Create a plan on the{" "}
+              <Link href="/memberships" className="underline hover:text-ink">
+                Memberships
+              </Link>{" "}
+              page to grant one here.
+            </p>
+          )}
         </section>
 
         {/* Body: history + notes */}

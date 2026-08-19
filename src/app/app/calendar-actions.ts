@@ -5,6 +5,7 @@ import { z } from "zod";
 import { sql } from "@/db";
 import { BookingError } from "@/lib/booking/errors";
 import { listCustomers } from "@/lib/customers";
+import { redeemForBooking } from "@/lib/memberships";
 import {
   bookRentalAsStaff,
   moveReservation as moveReservationEngine,
@@ -111,6 +112,28 @@ export async function createManualBooking(formData: FormData): Promise<BookingRe
       partySize: data.partySize,
       notes: data.notes,
     });
+
+    // Apply a pass credit / membership discount for this customer, if any.
+    const [cust] = await sql<{ id: string }[]>`
+      SELECT id FROM customer
+      WHERE organization_id = ${venue.organizationId} AND lower(email) = lower(${customer.email})
+    `;
+    if (cust) {
+      const redeemed = await redeemForBooking(
+        venue.organizationId,
+        cust.id,
+        booking.id,
+        booking.amountCents,
+      );
+      if (redeemed && redeemed.discountCents > 0) {
+        await sql`
+          UPDATE reservation
+          SET amount_cents = GREATEST(0, amount_cents - ${redeemed.discountCents})
+          WHERE id = ${booking.id}::uuid
+        `;
+      }
+    }
+
     revalidatePath("/calendar");
     revalidatePath("/");
     return { ok: true, reference: booking.reference };

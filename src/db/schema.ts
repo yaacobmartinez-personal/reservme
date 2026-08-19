@@ -442,6 +442,69 @@ export const promoRedemption = pgTable("promo_redemption", {
   createdAt,
 });
 
+/* ── Memberships, packages & passes (0014) ─────────────────────── */
+
+export const membershipPlan = pgTable(
+  "membership_plan",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    kind: text("kind").$type<"pass" | "membership">().notNull(),
+    priceCents: integer("price_cents").notNull().default(0),
+    credits: integer("credits"),
+    period: text("period").$type<"one_time" | "monthly">().notNull().default("one_time"),
+    benefitDiscountPct: integer("benefit_discount_pct"),
+    validDays: integer("valid_days"),
+    active: boolean("active").notNull().default(true),
+    createdAt,
+  },
+  (t) => [unique().on(t.organizationId, t.name)],
+);
+
+export const customerMembership = pgTable(
+  "customer_membership",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customer.id, { onDelete: "cascade" }),
+    planId: uuid("plan_id")
+      .notNull()
+      .references(() => membershipPlan.id, { onDelete: "restrict" }),
+    creditsRemaining: integer("credits_remaining").notNull().default(0),
+    status: text("status")
+      .$type<"active" | "expired" | "cancelled">()
+      .notNull()
+      .default("active"),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    createdAt,
+  },
+  (t) => [index("customer_membership_customer_idx").on(t.customerId, t.status)],
+);
+
+export const membershipRedemption = pgTable("membership_redemption", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  customerMembershipId: uuid("customer_membership_id")
+    .notNull()
+    .references(() => customerMembership.id, { onDelete: "cascade" }),
+  reservationId: uuid("reservation_id").references(() => reservation.id, {
+    onDelete: "set null",
+  }),
+  creditsUsed: integer("credits_used").notNull().default(0),
+  discountCents: integer("discount_cents").notNull().default(0),
+  createdAt,
+});
+
 export type PaymentMethod = "gcash_proof" | "paymongo" | "xendit" | "cash";
 export type PaymentStatus = "awaiting" | "approved" | "rejected" | "refunded";
 

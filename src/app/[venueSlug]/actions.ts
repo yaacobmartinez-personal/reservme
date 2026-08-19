@@ -13,6 +13,7 @@ import {
 } from "@/lib/jobs/enqueue";
 import { rateLimit } from "@/lib/rate-limit";
 import { consumePromo, validatePromo } from "@/lib/promo";
+import { redeemForBooking } from "@/lib/memberships";
 import { sql } from "@/db";
 import { getVenueBySlug } from "@/lib/venue";
 
@@ -108,6 +109,11 @@ export async function bookSlot(
       customer: { name: input.name, email: input.email, phone: input.phone },
     });
 
+    // Running amount after each discount, so promo then membership stack on the
+    // remaining balance. Each step is best-effort: the booking is committed, so
+    // a discount hiccup must never fail the customer.
+    let amountCents = reservation.amountCents;
+
     // Claim the promo now that the booking exists. This is atomic (uses+1 under
     // the cap), so a code that raced to its limit between validation and here
     // simply yields no discount — the booking still stands at full price.
@@ -117,12 +123,12 @@ export async function bookSlot(
           venue.organizationId,
           promo,
           reservation.id,
-          reservation.amountCents,
+          amountCents,
         );
         if (applied && applied.discountCents > 0) {
+          amountCents = Math.max(0, amountCents - applied.discountCents);
           await sql`
-            UPDATE reservation
-            SET amount_cents = GREATEST(0, amount_cents - ${applied.discountCents})
+            UPDATE reservation SET amount_cents = ${amountCents}
             WHERE id = ${reservation.id}::uuid
           `;
         }
@@ -134,6 +140,36 @@ export async function bookSlot(
           organizationId: venue.organizationId,
         });
       }
+    }
+
+    // Apply a pass credit or membership discount for a returning customer,
+    // matched by the booking email. Runs on whatever's left after the promo.
+    try {
+      const [cust] = await sql<{ id: string }[]>`
+        SELECT id FROM customer
+        WHERE organization_id = ${venue.organizationId} AND lower(email) = lower(${input.email})
+      `;
+      if (cust) {
+        const redeemed = await redeemForBooking(
+          venue.organizationId,
+          cust.id,
+          reservation.id,
+          amountCents,
+        );
+        if (redeemed && redeemed.discountCents > 0) {
+          amountCents = Math.max(0, amountCents - redeemed.discountCents);
+          await sql`
+            UPDATE reservation SET amount_cents = ${amountCents}
+            WHERE id = ${reservation.id}::uuid
+          `;
+        }
+      }
+    } catch (memberError) {
+      captureException(memberError, {
+        where: "bookSlot.membership",
+        reservationId: reservation.id,
+        organizationId: venue.organizationId,
+      });
     }
 
     revalidatePath(`/${input.venueSlug}`);

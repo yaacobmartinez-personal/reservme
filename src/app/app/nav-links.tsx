@@ -94,6 +94,20 @@ const LINKS = [
     ),
   },
   {
+    href: "/memberships",
+    label: "Memberships",
+    icon: (
+      <Icon
+        path={
+          <>
+            <rect x="2.5" y="5" width="15" height="10" rx="2" {...stroke} />
+            <path d="M2.5 9h15M6 12.5h3" {...stroke} />
+          </>
+        }
+      />
+    ),
+  },
+  {
     href: "/spaces",
     label: "Spaces",
     icon: (
