@@ -51,6 +51,20 @@ const LINKS = [
     ),
   },
   {
+    href: "/waitlist",
+    label: "Waitlist",
+    icon: (
+      <Icon
+        path={
+          <>
+            <path d="M4 5h12M4 10h12M4 15h7" {...stroke} />
+            <circle cx="15.5" cy="15" r="2.5" {...stroke} />
+          </>
+        }
+      />
+    ),
+  },
+  {
     href: "/customers",
     label: "Customers",
     icon: (

@@ -82,6 +82,10 @@ jobs:
         run: npx tsx scripts/test-staff.ts
       - name: Waitlist
         run: npx tsx scripts/test-waitlist.ts
+      - name: Export
+        run: npx tsx scripts/test-export.ts
+      - name: Billing reminders
+        run: npx tsx scripts/test-reminders.ts
 
       # HTTP suites need the app running; start web + worker in the background.
       - name: Start app

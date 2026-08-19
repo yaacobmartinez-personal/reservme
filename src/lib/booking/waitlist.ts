@@ -63,6 +63,52 @@ export async function promoteWaitlistForReservation(
   return promoteWaitlist(organizationId, r.space_id, r.starts_at, r.ends_at);
 }
 
+export type WaitlistEntry = {
+  id: string;
+  spaceName: string;
+  whenLabel: string;
+  customerName: string;
+  customerEmail: string;
+  status: string;
+  createdLabel: string;
+};
+
+/** Upcoming waiting/notified entries for the owner's waitlist view. */
+export async function listWaitlist(organizationId: string, timezone: string): Promise<WaitlistEntry[]> {
+  const rows = await sql<
+    {
+      id: string;
+      space_name: string;
+      when_label: string;
+      customer_name: string;
+      customer_email: string;
+      status: string;
+      created_label: string;
+    }[]
+  >`
+    SELECT w.id, s.name AS space_name,
+      to_char(w.starts_at AT TIME ZONE ${timezone}, 'Dy DD Mon, HH24:MI') AS when_label,
+      c.name AS customer_name, c.email AS customer_email, w.status,
+      to_char(w.created_at AT TIME ZONE ${timezone}, 'DD Mon') AS created_label
+    FROM waitlist w
+    JOIN space s    ON s.id = w.space_id
+    JOIN customer c ON c.id = w.customer_id
+    WHERE w.organization_id = ${organizationId}
+      AND w.status IN ('waiting', 'notified')
+      AND w.starts_at > now()
+    ORDER BY w.starts_at, w.created_at
+  `;
+  return rows.map((r) => ({
+    id: r.id,
+    spaceName: r.space_name,
+    whenLabel: r.when_label,
+    customerName: r.customer_name,
+    customerEmail: r.customer_email,
+    status: r.status,
+    createdLabel: r.created_label,
+  }));
+}
+
 export async function promoteWaitlist(
   organizationId: string,
   spaceId: string,

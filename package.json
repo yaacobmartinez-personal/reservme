@@ -27,7 +27,9 @@
     "test:branding": "tsx --env-file=.env.local scripts/test-branding.ts",
     "test:selfservice": "tsx --env-file=.env.local scripts/test-self-service.ts",
     "test:staff": "tsx --env-file=.env.local scripts/test-staff.ts",
-    "test:waitlist": "tsx --env-file=.env.local scripts/test-waitlist.ts"
+    "test:waitlist": "tsx --env-file=.env.local scripts/test-waitlist.ts",
+    "test:export": "tsx --env-file=.env.local scripts/test-export.ts",
+    "test:reminders": "tsx --env-file=.env.local scripts/test-reminders.ts"
   },
   "dependencies": {
     "@sentry/node": "^10.70.0",

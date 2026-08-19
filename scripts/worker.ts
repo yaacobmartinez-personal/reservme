@@ -14,6 +14,7 @@
 import { getBoss, QUEUES } from "../src/lib/jobs/boss";
 import type { BookingJob } from "../src/lib/jobs/enqueue";
 import { sweepExpiredHolds } from "../src/lib/booking/reserve";
+import { sendBillingReminders } from "../src/lib/billing-reminders";
 import { sendBookingConfirmation, sendBookingReminder } from "../src/lib/email/send-booking";
 import { pruneRateLimits } from "../src/lib/rate-limit";
 import { captureException, initObservability } from "../src/lib/observability";
@@ -28,6 +29,7 @@ async function main() {
   await boss.createQueue(QUEUES.holdSweep);
   await boss.createQueue(QUEUES.bookingConfirmation);
   await boss.createQueue(QUEUES.bookingReminder);
+  await boss.createQueue(QUEUES.billingReminders);
 
   // ── hold sweep ────────────────────────────────────────────────────
   await boss.work(QUEUES.holdSweep, async () => {
@@ -53,7 +55,17 @@ async function main() {
     console.log(`[worker] reminder ${result.delivered ? "sent" : "logged"} for ${job.data.reservationId}`);
   });
 
-  console.log("[worker] running — hold-sweep every minute, email queues live.");
+  // ── billing reminders (daily) ─────────────────────────────────────
+  await boss.work(QUEUES.billingReminders, async () => {
+    const { trialSoon, pastDue } = await sendBillingReminders();
+    if (trialSoon || pastDue) {
+      console.log(`[worker] billing reminders — ${trialSoon} ending soon, ${pastDue} past due`);
+    }
+  });
+  // 09:00 daily (server time).
+  await boss.schedule(QUEUES.billingReminders, "0 9 * * *");
+
+  console.log("[worker] running — hold-sweep every minute, email queues live, billing reminders daily.");
 }
 
 main().catch((error) => {

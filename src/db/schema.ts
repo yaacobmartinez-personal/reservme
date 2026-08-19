@@ -314,6 +314,9 @@ export const subscription = pgTable("subscription", {
   provider: text("provider"),
   providerRef: text("provider_ref"),
   note: text("note"),
+  // Reminder dedup (0009): when the owner was last nudged for each state.
+  trialReminderAt: timestamp("trial_reminder_at", { withTimezone: true }),
+  dueReminderAt: timestamp("due_reminder_at", { withTimezone: true }),
   createdAt,
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

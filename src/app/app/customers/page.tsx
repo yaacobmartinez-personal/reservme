@@ -86,11 +86,28 @@ export default async function CustomersPage({
   return (
     <main className="flex-1 py-8 sm:py-12">
       <div className="shell max-w-5xl">
-        <header className="flex items-baseline gap-3">
+        <header className="flex flex-wrap items-baseline gap-x-3 gap-y-2">
           <h1 className="text-head">Customers</h1>
           <span className="text-[0.875rem] text-ink-3">
             {total} {total === 1 ? "person" : "people"}
           </span>
+          <div className="ml-auto flex items-center gap-2">
+            {/* Download routes, not pages — a plain anchor triggers the file download. */}
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+            <a
+              href="/export/customers"
+              className="rounded-pill border border-rule px-3 py-1.5 text-[0.8125rem] text-ink-2 transition-colors duration-[--dur-fast] ease-out hover:border-rule-strong hover:text-ink"
+            >
+              Export customers
+            </a>
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+            <a
+              href="/export/bookings"
+              className="rounded-pill border border-rule px-3 py-1.5 text-[0.8125rem] text-ink-2 transition-colors duration-[--dur-fast] ease-out hover:border-rule-strong hover:text-ink"
+            >
+              Export bookings
+            </a>
+          </div>
         </header>
 
         <div className="mt-6">
