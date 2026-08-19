@@ -48,7 +48,7 @@ export default async function EditSpacePage({
 
   return (
     <main className="flex-1 py-10 sm:py-14">
-      <div className="shell max-w-2xl">
+      <div className="shell-wide">
         <Link href="/spaces" className="text-[0.875rem] text-ink-2 hover:text-accent">
           ← Spaces
         </Link>

@@ -29,7 +29,7 @@ export default async function PortfolioPage() {
 
   return (
     <main className="flex-1 py-8 sm:py-12">
-      <div className="shell max-w-4xl">
+      <div className="shell-wide">
         <h1 className="text-head">All venues</h1>
         <p className="mt-2 text-[0.9375rem] text-ink-2">
           Everything you run, rolled up. Booked value is booked, not collected.

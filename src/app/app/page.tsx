@@ -49,7 +49,7 @@ export default async function DashboardPage({
 
   return (
     <main className="flex-1 py-8 sm:py-12">
-      <div className="shell">
+      <div className="shell-wide">
         <Dashboard
           venue={venue}
           data={data}

@@ -43,7 +43,7 @@ export default async function SettingsPage() {
 
   return (
     <main className="flex-1 py-10 sm:py-14">
-      <div className="shell max-w-2xl">
+      <div className="shell-wide">
         <h1 className="text-head">Settings</h1>
 
         {/* Venue details + policy */}

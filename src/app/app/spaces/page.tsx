@@ -15,7 +15,7 @@ export default async function SpacesPage() {
 
   return (
     <main className="flex-1 py-10 sm:py-14">
-      <div className="shell max-w-4xl">
+      <div className="shell-wide">
         <h1 className="text-head">Spaces</h1>
         <p className="mt-2 text-[0.9375rem] text-ink-2">
           Each active space is one bookable thing on{" "}

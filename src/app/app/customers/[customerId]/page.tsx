@@ -63,7 +63,7 @@ export default async function CustomerProfilePage({
 
   return (
     <main className="flex-1 py-8 sm:py-12">
-      <div className="shell max-w-4xl">
+      <div className="shell-wide">
         <div className="flex items-center justify-between gap-3">
           <Link
             href="/customers"

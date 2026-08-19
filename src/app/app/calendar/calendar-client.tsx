@@ -97,7 +97,7 @@ export function CalendarClient({
 
   return (
     <main className="flex-1 py-6 sm:py-8">
-      <div className="shell max-w-6xl">
+      <div className="shell-wide">
         {/* Toolbar */}
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-head">Calendar</h1>

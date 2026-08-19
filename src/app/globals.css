@@ -137,6 +137,18 @@ h3 {
   }
 }
 
+/* Like shell, but full-width — no max-width cap. Used by the dashboard content
+   pages, which fill the space beside the sidebar rather than sitting centered
+   in a narrow column. */
+@utility shell-wide {
+  width: 100%;
+  padding-inline: 1.25rem;
+
+  @media (width >= 48rem) {
+    padding-inline: 2rem;
+  }
+}
+
 /* Uppercase micro-label. Used at most twice per page — see the
    section-tag discipline in tokens.css. */
 @utility label {

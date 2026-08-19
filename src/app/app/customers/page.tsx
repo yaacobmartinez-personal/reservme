@@ -85,7 +85,7 @@ export default async function CustomersPage({
 
   return (
     <main className="flex-1 py-8 sm:py-12">
-      <div className="shell max-w-5xl">
+      <div className="shell-wide">
         <header className="flex flex-wrap items-baseline gap-x-3 gap-y-2">
           <h1 className="text-head">Customers</h1>
           <span className="text-[0.875rem] text-ink-3">

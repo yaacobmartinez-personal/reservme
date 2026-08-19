@@ -28,7 +28,7 @@ export default async function MarketingPage() {
 
   return (
     <main className="flex-1 py-8 sm:py-12">
-      <div className="shell max-w-3xl">
+      <div className="shell-wide">
         <h1 className="text-head">Marketing</h1>
         <p className="mt-2 text-[0.9375rem] text-ink-2">
           Promo codes discount a customer&rsquo;s booking at checkout. Set a percentage
