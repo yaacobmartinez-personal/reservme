@@ -38,6 +38,68 @@ export type OwnerSpace = {
   openDays: number;
 };
 
+export type PricingRule = {
+  id: string;
+  label: string | null;
+  weekdays: number[];
+  startsAt: string;
+  endsAt: string;
+  priceCents: number;
+};
+
+export type SpaceSession = {
+  id: string;
+  title: string;
+  whenLabel: string;
+  capacity: number;
+  bookedSpots: number;
+  priceCents: number;
+};
+
+export async function listSpaceSessions(spaceId: string, timezone: string): Promise<SpaceSession[]> {
+  const rows = await sql<
+    { id: string; title: string; when_label: string; capacity: number; booked_spots: number; price_cents: number }[]
+  >`
+    SELECT id, title,
+      to_char(starts_at AT TIME ZONE ${timezone}, 'Dy DD Mon, HH24:MI')
+        || '–' || to_char(ends_at AT TIME ZONE ${timezone}, 'HH24:MI') AS when_label,
+      capacity, booked_spots, price_per_person_cents AS price_cents
+    FROM play_session
+    WHERE space_id = ${spaceId}::uuid AND cancelled = false AND starts_at > now()
+    ORDER BY starts_at
+  `;
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    whenLabel: r.when_label,
+    capacity: r.capacity,
+    bookedSpots: r.booked_spots,
+    priceCents: r.price_cents,
+  }));
+}
+
+export async function listPricingRules(spaceId: string): Promise<PricingRule[]> {
+  const rows = await sql<
+    { id: string; label: string | null; weekdays: number[]; starts_at: string; ends_at: string; price_cents: number }[]
+  >`
+    SELECT id, label, weekdays,
+           to_char(starts_at, 'HH24:MI') AS starts_at,
+           to_char(ends_at, 'HH24:MI') AS ends_at,
+           price_cents
+    FROM pricing_rule
+    WHERE space_id = ${spaceId}::uuid
+    ORDER BY created_at DESC
+  `;
+  return rows.map((r) => ({
+    id: r.id,
+    label: r.label,
+    weekdays: r.weekdays,
+    startsAt: r.starts_at,
+    endsAt: r.ends_at,
+    priceCents: r.price_cents,
+  }));
+}
+
 export async function listOwnerSpaces(organizationId: string): Promise<OwnerSpace[]> {
   const rows = await sql<
     {

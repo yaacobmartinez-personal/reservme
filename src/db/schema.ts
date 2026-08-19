@@ -166,6 +166,27 @@ export const space = pgTable(
   (t) => [unique().on(t.organizationId, t.slug)],
 );
 
+/** Peak/off-peak price overrides for a space (0010). */
+export const pricingRule = pgTable(
+  "pricing_rule",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    spaceId: uuid("space_id")
+      .notNull()
+      .references(() => space.id, { onDelete: "cascade" }),
+    label: text("label"),
+    weekdays: smallint("weekdays").array().notNull(),
+    startsAt: time("starts_at").notNull(),
+    endsAt: time("ends_at").notNull(),
+    priceCents: integer("price_cents").notNull(),
+    createdAt,
+  },
+  (t) => [index("pricing_rule_space_idx").on(t.spaceId, t.createdAt)],
+);
+
 export const openingHours = pgTable("opening_hours", {
   id: uuid("id").primaryKey().defaultRandom(),
   spaceId: uuid("space_id")

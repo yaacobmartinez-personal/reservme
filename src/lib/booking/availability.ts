@@ -86,7 +86,16 @@ export async function getDayAvailability(
       r.starts_at,
       r.ends_at,
       to_char(r.local_start, 'HH24:MI') AS label,
-      r.price_cents,
+      -- Peak/off-peak: a matching rule overrides the base price for this slot.
+      COALESCE(
+        (SELECT pr.price_cents FROM pricing_rule pr
+          WHERE pr.space_id = r.space_id
+            AND EXTRACT(DOW FROM r.local_start)::smallint = ANY(pr.weekdays)
+            AND r.local_start::time >= pr.starts_at
+            AND r.local_start::time <  pr.ends_at
+          ORDER BY pr.created_at DESC LIMIT 1),
+        r.price_cents
+      ) AS price_cents,
       -- A live reservation within buffer distance blocks the slot. The buffer
       -- is enforced here, not by the constraint: the constraint guards literal
       -- overlap, which is the part that must never be wrong.

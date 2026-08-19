@@ -245,6 +245,43 @@ export async function removeClosure(formData: FormData) {
   revalidatePath("/settings");
 }
 
+export async function addPricingRule(formData: FormData) {
+  const venue = await requireRole(...MANAGE);
+  const spaceId = z.string().uuid().parse(formData.get("spaceId"));
+  const time = z.string().regex(/^\d{2}:\d{2}$/);
+  const starts = time.parse(formData.get("starts"));
+  const ends = time.parse(formData.get("ends"));
+  if (ends <= starts) throw new Error("The end time must be after the start.");
+
+  const label = String(formData.get("label") ?? "").trim() || null;
+  const priceCents = toCents(formData.get("price"));
+
+  const weekdays: number[] = [];
+  for (let d = 0; d < 7; d += 1) if (formData.get(`wd_${d}`) === "on") weekdays.push(d);
+  if (weekdays.length === 0) throw new Error("Pick at least one day.");
+
+  // The INSERT ... SELECT ties the rule to a space in this org — a foreign
+  // spaceId matches no rows and writes nothing.
+  await sql`
+    INSERT INTO pricing_rule (organization_id, space_id, label, weekdays, starts_at, ends_at, price_cents)
+    SELECT ${venue.organizationId}, s.id, ${label}, ${weekdays}::smallint[], ${starts}, ${ends}, ${priceCents}
+    FROM space s
+    WHERE s.id = ${spaceId}::uuid AND s.organization_id = ${venue.organizationId}
+  `;
+  revalidatePath(`/spaces/${spaceId}`);
+}
+
+export async function removePricingRule(formData: FormData) {
+  const venue = await requireRole(...MANAGE);
+  const ruleId = z.string().uuid().parse(formData.get("ruleId"));
+  const spaceId = z.string().uuid().parse(formData.get("spaceId"));
+  await sql`
+    DELETE FROM pricing_rule
+     WHERE id = ${ruleId}::uuid AND organization_id = ${venue.organizationId}
+  `;
+  revalidatePath(`/spaces/${spaceId}`);
+}
+
 export async function updateVenueSettings(formData: FormData) {
   const venue = await requireRole(...MANAGE);
 

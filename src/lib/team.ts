@@ -7,6 +7,7 @@ import { sql } from "@/db";
  */
 
 export type TeamMember = {
+  memberId: string;
   userId: string;
   name: string;
   email: string;
@@ -23,15 +24,16 @@ export type PendingInvite = {
 
 export async function listMembers(organizationId: string): Promise<TeamMember[]> {
   const rows = await sql<
-    { user_id: string; name: string; email: string; role: string; created_at: Date }[]
+    { member_id: string; user_id: string; name: string; email: string; role: string; created_at: Date }[]
   >`
-    SELECT u.id AS user_id, u.name, u.email, m.role, m.created_at
+    SELECT m.id AS member_id, u.id AS user_id, u.name, u.email, m.role, m.created_at
     FROM member m
     JOIN "user" u ON u.id = m.user_id
     WHERE m.organization_id = ${organizationId}
     ORDER BY (m.role = 'owner') DESC, m.created_at
   `;
   return rows.map((r) => ({
+    memberId: r.member_id,
     userId: r.user_id,
     name: r.name,
     email: r.email,

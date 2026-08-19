@@ -86,6 +86,10 @@ jobs:
         run: npx tsx scripts/test-export.ts
       - name: Billing reminders
         run: npx tsx scripts/test-reminders.ts
+      - name: Pricing
+        run: npx tsx scripts/test-pricing.ts
+      - name: Sessions
+        run: npx tsx scripts/test-sessions.ts
 
       # HTTP suites need the app running; start web + worker in the background.
       - name: Start app

@@ -60,7 +60,28 @@ export function TeamSection({
               <span className="block truncate font-medium">{m.name}</span>
               <span className="block truncate text-[0.8125rem] text-ink-3">{m.email}</span>
             </span>
-            <span className={roleChip}>{m.role}</span>
+            {canManage && m.role !== "owner" ? (
+              <select
+                value={m.role}
+                disabled={pending}
+                onChange={(e) =>
+                  act(() =>
+                    authClient.organization.updateMemberRole({
+                      memberId: m.memberId,
+                      role: e.target.value as "admin" | "member",
+                      organizationId,
+                    }),
+                  )
+                }
+                aria-label={`Role for ${m.name}`}
+                className="rounded-pill border border-rule bg-paper-2 px-2.5 py-1 text-[0.75rem] text-ink-2"
+              >
+                <option value="member">member</option>
+                <option value="admin">admin</option>
+              </select>
+            ) : (
+              <span className={roleChip}>{m.role}</span>
+            )}
             {canManage && m.role !== "owner" ? (
               <button
                 type="button"

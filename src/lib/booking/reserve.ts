@@ -128,7 +128,17 @@ async function derivePlacement(
 ): Promise<Placement | null> {
   const [row] = await sql<Placement[]>`
     SELECT
-      s.price_cents,
+      -- Peak/off-peak: the slot's start time may carry a rule price (must match
+      -- what availability showed) — fall back to the space's base price.
+      COALESCE(
+        (SELECT pr.price_cents FROM pricing_rule pr
+          WHERE pr.space_id = s.id
+            AND EXTRACT(DOW FROM (${startsAt}::timestamptz AT TIME ZONE v.timezone))::smallint = ANY(pr.weekdays)
+            AND (${startsAt}::timestamptz AT TIME ZONE v.timezone)::time >= pr.starts_at
+            AND (${startsAt}::timestamptz AT TIME ZONE v.timezone)::time <  pr.ends_at
+          ORDER BY pr.created_at DESC LIMIT 1),
+        s.price_cents
+      ) AS price_cents,
       s.slot_minutes,
       s.is_active,
       ${startsAt}::timestamptz < now() + make_interval(mins => v.min_notice_minutes) AS too_soon,
