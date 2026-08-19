@@ -7,6 +7,7 @@
  * (price, template count, commission rate) or a count derived from data on
  * this page — never a fabricated metric.
  */
+
 export const SITE = {
   name: "ReservMe",
   tagline: "Booking software for venues that run on reservations",
@@ -116,7 +117,7 @@ export const NAV_LINKS = [
 export const HERO = {
   badge: "First month free — built for Philippine venues",
   headline: "Your calendar fills itself.",
-  lede: "One branded booking page for courts, studios, karaoke rooms, restaurants and island-hopping boats. Live availability, GCash at checkout, instant confirmation — and not one centavo of commission.",
+  lede: "One branded booking page for courts, studios, karaoke rooms, restaurants and island-hopping boats. Live availability, instant confirmation, every regular remembered — and not one centavo of commission.",
   primaryCta: { label: "Create your page", href: AUTH.signup },
   secondaryCta: { label: "See pricing", href: "#pricing" },
   footnote: `No card to start · from ${peso(ENTRY_PRICE)} a month, per venue · 0% commission, always`,
@@ -127,7 +128,7 @@ export const HERO_FACTS = [
   { value: "0%", label: "commission — we never take a cut" },
   { value: peso(ENTRY_PRICE), label: "a month to start, priced per venue" },
   { value: "24", label: "venue templates to start from" },
-  { value: "GCash", label: "Maya, QR Ph and cards, at cost" },
+  { value: "All-in-one", label: "booking, CRM, marketing & passes" },
 ] as const;
 
 /* ── The live booking widget rendered in the hero ────────────────── */
@@ -244,6 +245,18 @@ export const FEATURES = [
     body: "Run shared sessions with per-person spots — open play nights, a 7am class, the 14:00 boat — carved out of the very same schedule the space rents from. One calendar, two ways to sell it.",
   },
   {
+    title: "Passes and memberships that bring them back",
+    body: "Sell ten-session packs or monthly memberships. Credits and member discounts apply themselves the moment a regular books — steadier cash up front, and a reason to keep coming.",
+  },
+  {
+    title: "Every customer, remembered",
+    body: "A profile for everyone who books — visit history, lifetime spend, tags and private staff notes. Repeat guests are recognised and pre-filled; no-shows are flagged before you take the next one.",
+  },
+  {
+    title: "Fill the quiet hours",
+    body: "Promo codes for a slow Tuesday, loyalty points on every visit, and automatic win-back and review-request emails — so a first booking turns into a regular, without you lifting a finger.",
+  },
+  {
     title: "Weekly regulars, one checkout",
     body: "Let customers hold the same slot every week and pay for the whole run at once. Weeks that are already taken skip themselves.",
   },
@@ -252,32 +265,32 @@ export const FEATURES = [
     body: "When a slot is full, customers join a queue instead of leaving. A cancellation emails the next in line a claim link — first come, first served.",
   },
   {
-    title: "Prepaid packs and passes",
-    body: "Sell ten-session packs up front and punch a credit on each visit. Steadier cash, and the reason regulars come back.",
+    title: "Reserve now, settle at the venue",
+    body: "Customers book online and pay at your venue the way they already do — no deposits to chase, no chargebacks, no gateway fees. Taking GCash, Maya, QR Ph and cards at the moment of booking is coming soon, and we'll never take a commission on it.",
   },
   {
-    title: "No-shows on the record",
-    body: "Mark a no-show in one tap. Repeat offenders are flagged the next time they book, so you know when to ask for a deposit.",
+    title: "See the whole picture",
+    body: "Today's run sheet with one-tap check-in, over the numbers that matter — revenue, busiest hours, utilisation and a peak-time heatmap. Export bookings, customers or an accounting summary whenever your bookkeeper asks.",
   },
   {
-    title: "Paid at the moment of booking",
-    body: "GCash, Maya, QR Ph or card, through your own PayMongo or Xendit account — full amount or just a deposit. No gateway yet? Show your GCash QR and approve the proof your customer uploads. Either way the money is yours; we never touch it.",
+    title: "Every branch, one login",
+    body: "Run several venues from a single account, switch between them in a tap, and see a roll-up of bookings and revenue across all of them.",
+  },
+  {
+    title: "Plugs into your stack",
+    body: "Subscribe to your bookings in Google or Apple Calendar, POST them to Zapier or your own systems with signed webhooks, and read your spaces and bookings over a simple API.",
   },
   {
     title: "Your policies, actually enforced",
-    body: "Minimum notice, how far ahead people may book, whether cancelling online is allowed, and your refund terms — shown before anyone pays.",
+    body: "Minimum notice, how far ahead people may book, whether cancelling online is allowed, and your refund terms — shown before anyone books.",
   },
   {
     title: "Your brand, at your own link",
-    body: "Logo, cover photo, theme colour, a photo gallery and directions. Customers book on a page that looks like you, not like us.",
-  },
-  {
-    title: "A dashboard built around today",
-    body: "A short list of what needs you — deposits to verify, sessions half-empty — sitting over today's run sheet with one-tap check-in.",
+    body: "Logo, cover photo, theme colour, a photo of every space and directions. Customers book on a page that looks like you, not like us — and the emails they get look like you too.",
   },
   {
     title: "Customers who serve themselves",
-    body: "Confirmations, reminders and a reschedule link, so the phone stops ringing. Returning customers never retype their details.",
+    body: "Confirmations, reminders and a reschedule-or-cancel link, so the phone stops ringing. Returning customers never retype their details.",
   },
   {
     title: "Live in an afternoon",
@@ -314,7 +327,7 @@ export const SWITCH_REASONS = [
   {
     figure: peso(PLANS[1].price),
     against: "Everything useful is a paid add-on",
-    body: "Open play, waitlists, class packs, weekly regulars, branding — all of it is in the band price. There is no premium module to unlock, so the number you see on this page is the number you pay in month six.",
+    body: "Open play, waitlists, passes, memberships, promo codes, loyalty, a full customer CRM, multi-branch roll-up, webhooks and an API — all of it is in the band price. There is no premium module to unlock, so the number you see on this page is the number you pay in month six.",
   },
   {
     figure: "×0",
@@ -332,7 +345,7 @@ export const STEPS = [
   },
   {
     title: "Make it yours",
-    body: "Adjust prices and hours, upload your logo and photos, set your notice and refund rules, and add your GCash QR or connect PayMongo.",
+    body: "Adjust prices and hours, upload your logo and photos, set your notice and cancellation rules, and add passes, promos or loyalty if you want them.",
   },
   {
     title: "Share your link",
@@ -350,11 +363,15 @@ export const PRICING = {
   included: [
     "Branded booking page, emails and reminders",
     "Open play, classes and session schedules",
-    "GCash, Maya, QR Ph and cards via your own PayMongo or Xendit",
-    "Or a GCash QR with proof you approve — no gateway needed",
-    "Waitlists, class packs, passes and weekly regulars",
+    "Passes, memberships and weekly regulars",
+    "Waitlists that refill your cancellations",
+    "Customer CRM — profiles, tags, history, no-show flags",
+    "Promo codes, loyalty points and win-back emails",
+    "Peak/off-peak pricing, closures and booking rules",
     "Staff accounts, one-tap check-in and instant search",
-    "CSV export and a live Google Calendar feed",
+    "Analytics, CSV & accounting export, Google Calendar feed",
+    "Webhooks and a read API for your own tools",
+    "Multi-branch roll-up across every venue you run",
   ],
   presets: [
     { label: "One padel court", spaces: 1 },
@@ -366,7 +383,7 @@ export const PRICING = {
   quoteCta: { label: "Get a quote", href: CONTACT_HREF },
   fine: "Prices in PHP, VAT included · no card to start · cancel any time",
   gateway:
-    "Gateway fees go to PayMongo or Xendit at their published rates — QR Ph from 1.34%, GCash 2.23%. We add nothing on top.",
+    "Today customers reserve online and pay at your venue, so there are no gateway fees at all. Taking GCash, Maya, QR Ph and cards at the moment of booking is coming soon — and when it lands, we still won't take a commission.",
   volume: {
     text: "More than fifteen spaces, several branches, or a custom integration?",
     label: "Talk to us",
@@ -390,12 +407,20 @@ export const FAQS = [
     a: "No. They pick a slot, leave a name, an email and a mobile number, and get an instant confirmation. If they come back, we recognise them and pre-fill the rest — still no password, ever.",
   },
   {
-    q: "Can I take GCash without a payment gateway?",
-    a: "Yes, and plenty of venues start this way. Upload your GCash or Maya QR, and customers pay then attach the receipt as part of booking. It lands in your dashboard as a payment awaiting your approval — one tap to confirm, one tap to reject. No gateway account, no processing fee, and the booking is still held for them while you check.",
+    q: "How do customers pay?",
+    a: "Today they reserve online and pay at your venue — cash, GCash, whatever you already accept — so there are no gateway fees, deposits or chargebacks to manage. Taking payment at the moment of booking (GCash, Maya, QR Ph and cards) is coming soon, and we'll never take a commission on it.",
   },
   {
-    q: "And if I do want cards and instant confirmation?",
-    a: "Connect your own PayMongo or Xendit account and take GCash, Maya, QR Ph or card at the moment of booking, in full or as a deposit. Settlement goes from them straight to your bank. Their published rates are the only cut — QR Ph from 1.34%, GCash 2.23%, cards from 3.125% + ₱13.39 — and we add nothing on top of it.",
+    q: "Can I reward regulars and win back quiet customers?",
+    a: "Yes. Issue promo codes for slow days, sell passes and memberships, and award loyalty points on every visit. The app automatically emails customers who haven't booked in a while and nudges them for a review after a visit — and every customer gets a profile with their history, tags and your private notes.",
+  },
+  {
+    q: "Can I run more than one location?",
+    a: "Yes. Add as many venues as you run, switch between them in a tap, and see a roll-up of bookings and revenue across all of them from one login.",
+  },
+  {
+    q: "Can I connect ReservMe to my other tools?",
+    a: "Subscribe to your bookings in Google or Apple Calendar, send booking events to Zapier or your own systems with signed webhooks, and read your spaces and bookings over a simple API — all included, with no higher tier to buy.",
   },
   {
     q: "Can regulars hold the same slot every week?",
@@ -411,7 +436,7 @@ export const FAQS = [
   },
   {
     q: "Is this only for the Philippines?",
-    a: "It is built for it — peso pricing, GCash and QR Ph first, Philippine Standard Time by default, support in your hours rather than California's. Nothing stops a venue abroad using it; pick another currency and timezone at setup. But the defaults, the payment rails and the people answering you are here.",
+    a: "It is built for it — peso pricing, GCash-ready, Philippine Standard Time by default, support in your hours rather than California's. Nothing stops a venue abroad using it; pick another currency and timezone at setup. But the defaults, the coming payment rails and the people answering you are here.",
   },
   {
     q: "Do you take a cut of my bookings?",
