@@ -3,10 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDayAvailability, getDaySessions } from "@/lib/booking/availability";
 import { sweepExpiredHolds } from "@/lib/booking/reserve";
-import { formatMoney } from "@/lib/money";
 import { getLocalDates, getVenueBySlug, getVenueSpaces } from "@/lib/venue";
-import { BookingForm } from "./booking-form";
-import { WaitlistJoin } from "./waitlist-join";
+import { VenueBooking } from "./venue-booking";
 
 export const dynamic = "force-dynamic";
 
@@ -77,14 +75,6 @@ export default async function VenuePage({
     getDaySessions(venue.organizationId, activeSpace.id, activeDate),
   ]);
 
-  const linkFor = (next: { space?: string; date?: string }) => {
-    const query = new URLSearchParams({
-      space: next.space ?? activeSpace.slug,
-      date: next.date ?? activeDate,
-    });
-    return `/${venue.slug}?${query}`;
-  };
-
   return (
     <main data-brand={venue.theme} className="flex-1 py-10 sm:py-16">
       <div className="shell max-w-3xl">
@@ -122,118 +112,19 @@ export default async function VenuePage({
           <p className="mt-4 text-[0.875rem] text-ink-3">{venue.address}</p>
         ) : null}
 
-        <div className="mt-8 rounded-xl border border-rule bg-card p-6 shadow-float sm:p-8">
-          {/* Spaces */}
-          {spaces.length > 1 ? (
-            <nav aria-label="Spaces" className="flex flex-wrap gap-2">
-              {spaces.map((space) => {
-                const active = space.id === activeSpace.id;
-                return (
-                  <Link
-                    key={space.id}
-                    href={linkFor({ space: space.slug })}
-                    aria-current={active ? "page" : undefined}
-                    className={[
-                      "whitespace-nowrap rounded-pill border px-3.5 py-1.5 text-[0.8125rem]",
-                      "transition-colors duration-[--dur-fast] ease-out",
-                      active
-                        ? "border-ink bg-ink text-paper"
-                        : "border-rule bg-card text-ink-2 hover:border-rule-strong hover:text-ink",
-                    ].join(" ")}
-                  >
-                    {space.name}
-                  </Link>
-                );
-              })}
-            </nav>
-          ) : null}
-
-          {/* Dates */}
-          <nav aria-label="Dates" className="mt-5 grid grid-cols-7 gap-1.5">
-            {dates.map((date) => {
-              const active = date.d === activeDate;
-              return (
-                <Link
-                  key={date.d}
-                  href={linkFor({ date: date.d })}
-                  aria-current={active ? "page" : undefined}
-                  className={[
-                    "flex flex-col items-center gap-0.5 rounded-sm border py-2",
-                    "transition-colors duration-[--dur-fast] ease-out",
-                    active
-                      ? "border-ink bg-ink text-paper"
-                      : "border-rule bg-card text-ink-2 hover:border-rule-strong",
-                  ].join(" ")}
-                >
-                  <span className="label opacity-70">{date.weekday}</span>
-                  <span className="font-mono text-[0.9375rem] leading-none">
-                    {date.day}
-                  </span>
-                </Link>
-              );
-            })}
-          </nav>
-
-          <p className="mt-5 flex items-baseline justify-between gap-3 border-t border-rule pt-5">
-            <span className="text-[0.9375rem] font-medium">{activeSpace.name}</span>
-            <span className="text-[0.875rem] text-ink-3">
-              {formatMoney(activeSpace.priceCents, venue.currency)} /{" "}
-              {activeSpace.slotMinutes} min
-            </span>
-          </p>
-
-          <div className="mt-6">
-            <BookingForm
-              key={`${activeSpace.id}:${activeDate}`}
-              venueSlug={venue.slug}
-              spaceId={activeSpace.id}
-              slots={slots}
-              currency={venue.currency}
-            />
-          </div>
+        <div className="mt-8">
+          <VenueBooking
+            venueSlug={venue.slug}
+            currency={venue.currency}
+            spaces={spaces}
+            activeSpace={activeSpace}
+            dates={dates}
+            activeDate={activeDate}
+            slots={slots}
+            sessions={sessions}
+            basePath={`/${venue.slug}`}
+          />
         </div>
-
-        <WaitlistJoin
-          venueSlug={venue.slug}
-          spaceId={activeSpace.id}
-          takenSlots={slots
-            .filter((s) => s.reason === "taken")
-            .map((s) => ({
-              time: s.label,
-              startsAtISO: s.startsAt.toISOString(),
-              endsAtISO: s.endsAt.toISOString(),
-            }))}
-        />
-
-        {/* Shared sessions */}
-        {sessions.length > 0 ? (
-          <section className="mt-6">
-            <h2 className="text-xl">Sessions on this day</h2>
-            <ul className="mt-3 space-y-2">
-              {sessions.map((session) => (
-                <li
-                  key={session.id}
-                  className="flex items-center justify-between gap-4 rounded-lg border border-accent-line bg-accent-soft p-4"
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate font-medium text-accent-ink">
-                      {session.title}
-                    </span>
-                    <span className="block truncate text-[0.875rem] text-accent-ink/75">
-                      {session.label} ·{" "}
-                      {session.spotsLeft > 0
-                        ? `${session.spotsLeft} of ${session.capacity} spots left`
-                        : "Full"}
-                    </span>
-                  </span>
-                  <span className="shrink-0 font-mono text-[0.875rem] text-accent-ink">
-                    {formatMoney(session.pricePerPersonCents, venue.currency)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
 
         <footer className="mt-10 border-t border-rule pt-6 text-[0.8125rem] text-ink-3">
           <p>

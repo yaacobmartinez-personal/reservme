@@ -62,15 +62,28 @@ type ApiKeyView = {
   revokedAt: string | null;
 };
 
+function embedSnippet(embedUrl: string, venueName: string): string {
+  const title = venueName.replace(/"/g, "&quot;");
+  return [
+    `<iframe src="${embedUrl}" title="Book ${title}" style="width:100%;border:0" loading="lazy" id="reservme-embed"></iframe>`,
+    `<script>addEventListener("message",function(e){if(e.data&&e.data.type==="reservme:resize"){var f=document.getElementById("reservme-embed");if(f)f.style.height=e.data.height+"px";}});</script>`,
+  ].join("\n");
+}
+
 export function IntegrationsSection({
+  embedUrl,
+  venueName,
   icalUrl,
   webhooks,
   apiKeys,
 }: {
+  embedUrl: string;
+  venueName: string;
   icalUrl: string;
   webhooks: WebhookView[];
   apiKeys: ApiKeyView[];
 }) {
+  const snippet = embedSnippet(embedUrl, venueName);
   const [hook, hookAction] = useActionState<WebhookFormState, FormData>(addWebhook, {
     status: "idle",
   });
@@ -87,8 +100,36 @@ export function IntegrationsSection({
         Connect ReservMe to your calendar and other tools.
       </p>
 
-      {/* ── Calendar feed ── */}
+      {/* ── Website embed ── */}
       <div className="mt-6 border-t border-rule pt-6">
+        <h3 className="font-medium">Embed on your website</h3>
+        <p className="mt-1 text-[0.875rem] text-ink-3">
+          Drop your booking widget into any site — WordPress (a Custom HTML block),
+          Next.js/React, or plain HTML. It resizes itself, no scrollbar. Paste this
+          where you want it to appear:
+        </p>
+        <textarea
+          readOnly
+          rows={4}
+          value={snippet}
+          onFocus={(e) => e.currentTarget.select()}
+          className="mt-3 w-full rounded-sm border border-rule bg-paper-2 px-3 py-2 font-mono text-[0.75rem] leading-relaxed"
+        />
+        <div className="mt-2 flex items-center gap-2">
+          <CopyButton value={snippet} />
+          <a
+            href={embedUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="whitespace-nowrap rounded-pill px-3 py-1.5 text-[0.8125rem] text-ink-3 hover:bg-paper-3 hover:text-ink"
+          >
+            Preview ↗
+          </a>
+        </div>
+      </div>
+
+      {/* ── Calendar feed ── */}
+      <div className="mt-8 border-t border-rule pt-6">
         <h3 className="font-medium">Calendar feed</h3>
         <p className="mt-1 text-[0.875rem] text-ink-3">
           A private link to subscribe to your bookings in Google or Apple Calendar.

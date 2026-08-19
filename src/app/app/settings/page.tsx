@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { sql } from "@/db";
 import { listApiKeys } from "@/lib/api-keys";
-import { appUrl } from "@/lib/env";
+import { apexUrl, appUrl } from "@/lib/env";
 import { getBranding, getClosures, getVenueSettings, listOwnerSpaces } from "@/lib/owner";
 import { listInvitations, listMembers } from "@/lib/team";
 import { requireVenue } from "@/lib/tenancy";
@@ -281,6 +281,8 @@ export default async function SettingsPage() {
         </section>
 
         <IntegrationsSection
+          embedUrl={apexUrl(`/${venue.slug}/embed`)}
+          venueName={settings.name}
           icalUrl={icalUrl}
           webhooks={webhooks.map((w) => ({
             id: w.id,
