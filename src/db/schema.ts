@@ -142,6 +142,8 @@ export const venue = pgTable("venue", {
   gcashName: text("gcash_name"),
   /** Branding (0005): a cover image as a data URL. Logo is on organization. */
   coverUrl: text("cover_url"),
+  /** Engagement (0012): the owner's review link; review requests need it set. */
+  reviewUrl: text("review_url"),
   createdAt,
 });
 
@@ -224,6 +226,9 @@ export const customer = pgTable(
     // CRM (0003): hand-curated tags + marketing consent. See customerNote below.
     tags: text("tags").array().notNull().default([]),
     marketingOptIn: boolean("marketing_opt_in").notNull().default(false),
+    // Engagement (0012): accrued loyalty points; when a win-back nudge was sent.
+    loyaltyPoints: integer("loyalty_points").notNull().default(0),
+    winbackAt: timestamp("winback_at", { withTimezone: true }),
     createdAt,
   },
   (t) => [unique().on(t.organizationId, t.email)],
@@ -307,6 +312,9 @@ export const reservation = pgTable(
     reference: text("reference").notNull().unique(),
     /** Unguessable capability behind the customer "manage booking" link (0006). */
     manageToken: uuid("manage_token").notNull().defaultRandom(),
+    // Engagement (0012): loyalty accrued once; review-request sent once.
+    loyaltyAccrued: boolean("loyalty_accrued").notNull().default(false),
+    reviewRequestedAt: timestamp("review_requested_at", { withTimezone: true }),
     notes: text("notes"),
     createdAt,
   },

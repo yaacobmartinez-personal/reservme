@@ -44,4 +44,6 @@ export const QUEUES = {
   bookingConfirmation: "booking-confirmation",
   bookingReminder: "booking-reminder",
   billingReminders: "billing-reminders",
+  loyaltyAccrual: "loyalty-accrual",
+  engagement: "engagement",
 } as const;

@@ -22,10 +22,7 @@ export function PromoForm() {
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
-    if (state.status === "created") {
-      formRef.current?.reset();
-      setKind("percent");
-    }
+    if (state.status === "created") formRef.current?.reset();
   }, [state]);
 
   return (

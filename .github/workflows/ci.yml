@@ -94,6 +94,8 @@ jobs:
         run: npx tsx scripts/test-portfolio.ts
       - name: Promo codes
         run: npx tsx scripts/test-promo.ts
+      - name: Engagement + loyalty
+        run: npx tsx scripts/test-engagement.ts
 
       # HTTP suites need the app running; start web + worker in the background.
       - name: Start app

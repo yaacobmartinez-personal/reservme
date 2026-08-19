@@ -1,16 +1,23 @@
 import type { Metadata } from "next";
+import { sql } from "@/db";
 import { formatMoney } from "@/lib/money";
 import { listPromoCodes } from "@/lib/promo";
 import { requireVenue } from "@/lib/tenancy";
 import { setPromoActive } from "./actions";
 import { PromoForm } from "./promo-form";
+import { ReviewLinkForm } from "./review-form";
 
 export const metadata: Metadata = { title: "Marketing" };
 export const dynamic = "force-dynamic";
 
 export default async function MarketingPage() {
   const venue = await requireVenue();
-  const codes = await listPromoCodes(venue.organizationId);
+  const [codes, [venueRow]] = await Promise.all([
+    listPromoCodes(venue.organizationId),
+    sql<{ review_url: string | null }[]>`
+      SELECT review_url FROM venue WHERE organization_id = ${venue.organizationId}
+    `,
+  ]);
 
   const expiryFmt = new Intl.DateTimeFormat("en-PH", {
     day: "numeric",
@@ -95,6 +102,17 @@ export default async function MarketingPage() {
             </table>
           </div>
         )}
+
+        <h2 className="mt-12 text-head">Engagement</h2>
+        <p className="mt-2 text-[0.9375rem] text-ink-2">
+          Automatic emails that bring customers back. Win-back nudges go to
+          opted-in customers who haven&rsquo;t visited in a while; review requests
+          go out after a visit once you set a link below.
+        </p>
+
+        <div className="mt-6">
+          <ReviewLinkForm reviewUrl={venueRow?.review_url ?? null} />
+        </div>
       </div>
     </main>
   );

@@ -73,6 +73,37 @@ export async function createPromo(
   return { status: "created", code };
 }
 
+export type ReviewFormState =
+  | { status: "idle" }
+  | { status: "error"; message: string }
+  | { status: "saved" };
+
+const reviewSchema = z.object({
+  reviewUrl: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? null : v),
+    z.string().url("Enter a full link, e.g. https://g.page/…").nullable(),
+  ),
+});
+
+export async function updateReviewUrl(
+  _previous: ReviewFormState,
+  formData: FormData,
+): Promise<ReviewFormState> {
+  const venue = await requireRole("owner", "admin");
+
+  const parsed = reviewSchema.safeParse({ reviewUrl: formData.get("reviewUrl") });
+  if (!parsed.success) {
+    return { status: "error", message: parsed.error.issues[0].message };
+  }
+
+  await sql`
+    UPDATE venue SET review_url = ${parsed.data.reviewUrl}
+    WHERE organization_id = ${venue.organizationId}
+  `;
+  revalidatePath("/marketing");
+  return { status: "saved" };
+}
+
 export async function setPromoActive(formData: FormData) {
   const venue = await requireRole("owner", "admin");
   const id = String(formData.get("id") ?? "");

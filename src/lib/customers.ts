@@ -202,6 +202,7 @@ export type CustomerProfile = {
   createdAt: Date;
   bookings: number;
   lifetimeValueCents: number;
+  loyaltyPoints: number;
   lastVisit: Date | null;
   upcoming: CustomerBooking[];
   past: CustomerBooking[];
@@ -224,13 +225,14 @@ export async function getCustomer(
       no_show_count: number;
       marketing_opt_in: boolean;
       created_at: Date;
+      loyalty_points: number;
       bookings: number;
       ltv_cents: number;
       last_visit: Date | null;
     }[]
   >`
     SELECT c.id, c.name, c.email, c.phone, c.tags, c.no_show_count,
-           c.marketing_opt_in, c.created_at,
+           c.marketing_opt_in, c.created_at, c.loyalty_points,
            COALESCE(count(r.*) FILTER (
              WHERE r.status = 'confirmed' AND ${BOOKABLE}), 0)::int AS bookings,
            COALESCE(sum(r.amount_cents) FILTER (
@@ -302,6 +304,7 @@ export async function getCustomer(
     createdAt: base.created_at,
     bookings: base.bookings,
     lifetimeValueCents: base.ltv_cents,
+    loyaltyPoints: base.loyalty_points,
     lastVisit: base.last_visit,
     // upcoming comes back newest-first from the DESC sort; flip it so the next
     // booking reads top-down chronologically.

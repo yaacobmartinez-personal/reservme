@@ -56,6 +56,7 @@ export default async function CustomerProfilePage({
   const tiles = [
     { label: "Lifetime value", value: formatMoney(customer.lifetimeValueCents, venue.currency) },
     { label: "Bookings", value: String(customer.bookings) },
+    { label: "Loyalty points", value: customer.loyaltyPoints.toLocaleString("en-PH") },
     { label: "No-shows", value: String(customer.noShowCount) },
     { label: "Member since", value: memberSince },
   ];

@@ -15,6 +15,7 @@ import { getBoss, QUEUES } from "../src/lib/jobs/boss";
 import type { BookingJob } from "../src/lib/jobs/enqueue";
 import { sweepExpiredHolds } from "../src/lib/booking/reserve";
 import { sendBillingReminders } from "../src/lib/billing-reminders";
+import { accrueLoyalty, sendWinbacks, sendReviewRequests } from "../src/lib/engagement";
 import { sendBookingConfirmation, sendBookingReminder } from "../src/lib/email/send-booking";
 import { pruneRateLimits } from "../src/lib/rate-limit";
 import { captureException, initObservability } from "../src/lib/observability";
@@ -30,6 +31,8 @@ async function main() {
   await boss.createQueue(QUEUES.bookingConfirmation);
   await boss.createQueue(QUEUES.bookingReminder);
   await boss.createQueue(QUEUES.billingReminders);
+  await boss.createQueue(QUEUES.loyaltyAccrual);
+  await boss.createQueue(QUEUES.engagement);
 
   // ── hold sweep ────────────────────────────────────────────────────
   await boss.work(QUEUES.holdSweep, async () => {
@@ -65,7 +68,27 @@ async function main() {
   // 09:00 daily (server time).
   await boss.schedule(QUEUES.billingReminders, "0 9 * * *");
 
-  console.log("[worker] running — hold-sweep every minute, email queues live, billing reminders daily.");
+  // ── loyalty accrual (every 15 min) ────────────────────────────────
+  await boss.work(QUEUES.loyaltyAccrual, async () => {
+    const { customers, points } = await accrueLoyalty();
+    if (points > 0) {
+      console.log(`[worker] loyalty — awarded ${points} point(s) to ${customers} customer(s)`);
+    }
+  });
+  await boss.schedule(QUEUES.loyaltyAccrual, "*/15 * * * *");
+
+  // ── engagement emails (daily) ─────────────────────────────────────
+  await boss.work(QUEUES.engagement, async () => {
+    const winbacks = await sendWinbacks();
+    const reviews = await sendReviewRequests();
+    if (winbacks || reviews) {
+      console.log(`[worker] engagement — ${winbacks} win-back, ${reviews} review request(s)`);
+    }
+  });
+  // 10:00 daily (server time), after the billing nudge.
+  await boss.schedule(QUEUES.engagement, "0 10 * * *");
+
+  console.log("[worker] running — hold-sweep every minute, email queues live, billing + engagement daily.");
 }
 
 main().catch((error) => {
