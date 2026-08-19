@@ -90,6 +90,8 @@ jobs:
         run: npx tsx scripts/test-pricing.ts
       - name: Sessions
         run: npx tsx scripts/test-sessions.ts
+      - name: Portfolio
+        run: npx tsx scripts/test-portfolio.ts
 
       # HTTP suites need the app running; start web + worker in the background.
       - name: Start app

@@ -31,7 +31,8 @@
     "test:export": "tsx --env-file=.env.local scripts/test-export.ts",
     "test:reminders": "tsx --env-file=.env.local scripts/test-reminders.ts",
     "test:pricing": "tsx --env-file=.env.local scripts/test-pricing.ts",
-    "test:sessions": "tsx --env-file=.env.local scripts/test-sessions.ts"
+    "test:sessions": "tsx --env-file=.env.local scripts/test-sessions.ts",
+    "test:portfolio": "tsx --env-file=.env.local scripts/test-portfolio.ts"
   },
   "dependencies": {
     "@sentry/node": "^10.70.0",

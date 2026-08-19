@@ -4,10 +4,12 @@ import { Wordmark } from "@/components/marketing/wordmark";
 import { auth } from "@/lib/auth";
 import { getBillingState } from "@/lib/billing";
 import { formatMoney } from "@/lib/money";
+import { listUserVenues } from "@/lib/portfolio";
 import { currentVenue } from "@/lib/tenancy";
 import { BillingBanner } from "./billing-banner";
 import { AppNavLinks } from "./nav-links";
 import { SignOutButton } from "./sign-out-button";
+import { VenueSwitcher } from "./venue-switcher";
 import { VerifyBanner } from "./verify-banner";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +29,9 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
   const session = venue.impersonatedBy
     ? null
     : await auth.api.getSession({ headers: await headers() });
+
+  // The venues this owner runs — for the switcher (empty while impersonating).
+  const userVenues = session?.user ? await listUserVenues(session.user.id) : [];
   const verifyBanner =
     session?.user && !session.user.emailVerified ? (
       <VerifyBanner email={session.user.email} />
@@ -87,7 +92,17 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
           <AppNavLinks orientation="vertical" />
         </div>
         <div className="border-t border-rule p-3">
-          <p className="truncate px-2 pb-2 text-[0.8125rem] text-ink-3">{venue.name}</p>
+          {venue.impersonatedBy ? (
+            <p className="truncate px-2 pb-2 text-[0.8125rem] text-ink-3">{venue.name}</p>
+          ) : (
+            <div className="pb-3">
+              <VenueSwitcher
+                currentOrgId={venue.organizationId}
+                currentName={venue.name}
+                venues={userVenues}
+              />
+            </div>
+          )}
           <SignOutButton className="w-full" />
         </div>
       </aside>
