@@ -36,6 +36,7 @@ export type OwnerSpace = {
   isActive: boolean;
   sortOrder: number;
   openDays: number;
+  imageUrl: string | null;
 };
 
 export type PricingRule = {
@@ -114,10 +115,11 @@ export async function listOwnerSpaces(organizationId: string): Promise<OwnerSpac
       is_active: boolean;
       sort_order: number;
       open_days: number;
+      image_url: string | null;
     }[]
   >`
     SELECT s.id, s.name, s.slug, s.kind, s.capacity, s.slot_minutes,
-           s.buffer_minutes, s.price_cents, s.is_active, s.sort_order,
+           s.buffer_minutes, s.price_cents, s.is_active, s.sort_order, s.image_url,
            (SELECT count(DISTINCT weekday)::int FROM opening_hours oh
              WHERE oh.space_id = s.id) AS open_days
     FROM space s
@@ -137,6 +139,7 @@ export async function listOwnerSpaces(organizationId: string): Promise<OwnerSpac
     isActive: row.is_active,
     sortOrder: row.sort_order,
     openDays: row.open_days,
+    imageUrl: row.image_url,
   }));
 }
 

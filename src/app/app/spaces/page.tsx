@@ -5,6 +5,7 @@ import { listOwnerSpaces } from "@/lib/owner";
 import { requireVenue } from "@/lib/tenancy";
 import { setSpaceActive } from "../actions";
 import { AddSpace } from "./space-forms";
+import { SpacePhoto } from "./space-photo";
 
 export const metadata: Metadata = { title: "Spaces" };
 export const dynamic = "force-dynamic";
@@ -23,54 +24,63 @@ export default async function SpacesPage() {
           counts toward your plan.
         </p>
 
-        <ul className="mt-8 space-y-3">
+        <ul className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {spaces.map((space) => (
             <li
               key={space.id}
-              className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-lg border border-rule bg-card p-4 shadow-plate sm:p-5"
+              className="flex flex-col overflow-hidden rounded-xl border border-rule bg-card shadow-plate"
             >
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <Link
-                    href={`/spaces/${space.id}`}
-                    className="truncate font-medium hover:text-accent"
-                  >
-                    {space.name}
-                  </Link>
-                  {space.isActive ? null : (
-                    <span className="label rounded-pill border border-rule px-2 py-0.5 text-ink-3">
-                      Off
-                    </span>
-                  )}
-                </div>
+              <Link
+                href={`/spaces/${space.id}`}
+                className="relative block aspect-video overflow-hidden bg-paper-2"
+              >
+                <SpacePhoto
+                  src={space.imageUrl}
+                  name={space.name}
+                  className={space.isActive ? "" : "opacity-50 grayscale"}
+                />
+                {space.isActive ? null : (
+                  <span className="label absolute right-2 top-2 rounded-pill bg-ink/75 px-2 py-0.5 text-paper">
+                    Off
+                  </span>
+                )}
+              </Link>
+
+              <div className="flex flex-1 flex-col p-4">
+                <Link
+                  href={`/spaces/${space.id}`}
+                  className="truncate font-medium hover:text-accent"
+                >
+                  {space.name}
+                </Link>
                 <p className="mt-1 text-[0.8125rem] text-ink-3">
                   {space.kind} · {formatMoney(space.priceCents, venue.currency)} /{" "}
                   {space.slotMinutes}min · open {space.openDays}/7 days
                   {space.capacity > 1 ? ` · up to ${space.capacity}` : ""}
                 </p>
-              </div>
 
-              <div className="flex items-center gap-2">
-                <Link
-                  href={`/spaces/${space.id}`}
-                  className="whitespace-nowrap rounded-pill border border-rule-strong px-3.5 py-1.5 text-[0.8125rem] transition-colors duration-[--dur-fast] ease-out hover:border-ink"
-                >
-                  Edit
-                </Link>
-                <form action={setSpaceActive}>
-                  <input type="hidden" name="spaceId" value={space.id} />
-                  <input
-                    type="hidden"
-                    name="active"
-                    value={space.isActive ? "false" : "true"}
-                  />
-                  <button
-                    type="submit"
-                    className="whitespace-nowrap rounded-pill px-3 py-1.5 text-[0.8125rem] text-ink-2 transition-colors duration-[--dur-fast] ease-out hover:bg-paper-3 hover:text-ink"
+                <div className="mt-4 flex items-center gap-2 border-t border-rule pt-3">
+                  <Link
+                    href={`/spaces/${space.id}`}
+                    className="whitespace-nowrap rounded-pill border border-rule-strong px-3.5 py-1.5 text-[0.8125rem] transition-colors duration-[--dur-fast] ease-out hover:border-ink"
                   >
-                    {space.isActive ? "Turn off" : "Turn on"}
-                  </button>
-                </form>
+                    Edit
+                  </Link>
+                  <form action={setSpaceActive} className="ml-auto">
+                    <input type="hidden" name="spaceId" value={space.id} />
+                    <input
+                      type="hidden"
+                      name="active"
+                      value={space.isActive ? "false" : "true"}
+                    />
+                    <button
+                      type="submit"
+                      className="whitespace-nowrap rounded-pill px-3 py-1.5 text-[0.8125rem] text-ink-2 transition-colors duration-[--dur-fast] ease-out hover:bg-paper-3 hover:text-ink"
+                    >
+                      {space.isActive ? "Turn off" : "Turn on"}
+                    </button>
+                  </form>
+                </div>
               </div>
             </li>
           ))}

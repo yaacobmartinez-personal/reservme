@@ -7,6 +7,7 @@ import { formatMoney } from "@/lib/money";
 import { requireVenue } from "@/lib/tenancy";
 import { addPricingRule, removePricingRule, setOpeningHours, updateSpace } from "../../actions";
 import { cancelSession, createSession } from "../../session-actions";
+import { SpaceImage } from "./space-image";
 
 const DAY_ABBR = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -122,6 +123,9 @@ export default async function EditSpacePage({
             </Button>
           </form>
         </section>
+
+        {/* Photo */}
+        <SpaceImage spaceId={space.id} name={space.name} initial={space.imageUrl} />
 
         {/* Opening hours */}
         <section className="mt-6 rounded-xl border border-rule bg-card p-6 shadow-float sm:p-8">

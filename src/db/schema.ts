@@ -163,6 +163,8 @@ export const space = pgTable(
     priceCents: integer("price_cents").notNull().default(0),
     isActive: boolean("is_active").notNull().default(true),
     sortOrder: integer("sort_order").notNull().default(0),
+    /** A photo of the space, as a size-capped data URL (0013). */
+    imageUrl: text("image_url"),
     createdAt,
   },
   (t) => [unique().on(t.organizationId, t.slug)],

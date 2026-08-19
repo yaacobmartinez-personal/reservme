@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { sql } from "@/db";
+import { COVER_MAX_BYTES, validateImageDataUrl } from "@/lib/branding";
 import { slugify } from "@/lib/slug";
 import { requireRole } from "@/lib/tenancy";
 
@@ -134,6 +135,39 @@ export async function setSpaceActive(formData: FormData) {
   revalidatePath("/spaces");
   revalidatePath(`/spaces/${spaceId}`);
   revalidatePath("/");
+}
+
+/**
+ * Sets or clears a space's photo. The client sends a data URL to set, "" to
+ * clear, or the KEEP sentinel to leave the existing image untouched (so a
+ * re-save doesn't have to resend the whole payload). Same allowlist + byte cap
+ * as venue cover images.
+ */
+const KEEP_IMAGE = "__keep__";
+
+export async function updateSpaceImage(
+  formData: FormData,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const venue = await requireRole(...MANAGE);
+  const spaceId = z.string().uuid().parse(formData.get("spaceId"));
+  const raw = String(formData.get("image") ?? "");
+
+  if (raw !== KEEP_IMAGE) {
+    let imageUrl: string | null = null;
+    if (raw !== "") {
+      const check = validateImageDataUrl(raw, COVER_MAX_BYTES);
+      if (!check.ok) return { ok: false, error: check.error };
+      imageUrl = raw;
+    }
+    await sql`
+      UPDATE space SET image_url = ${imageUrl}
+       WHERE id = ${spaceId}::uuid AND organization_id = ${venue.organizationId}
+    `;
+  }
+
+  revalidatePath("/spaces");
+  revalidatePath(`/spaces/${spaceId}`);
+  return { ok: true };
 }
 
 /**
