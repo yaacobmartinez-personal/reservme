@@ -1,0 +1,74 @@
+# Render Blueprint — deploys ReservMe as two services from the one Docker image:
+#
+#   • reservme-web    — the Next.js app (apex marketing + booking, app dashboard,
+#                       admin console). Default CMD is `node server.js`.
+#   • reservme-worker — the background worker (pg-boss): confirmation & reminder
+#                       emails, hold sweep, loyalty accrual, engagement emails,
+#                       webhook delivery, and daily billing reminders + the
+#                       10-day-grace auto-suspend. Runs `node worker.js`.
+#
+# Both build from ./Dockerfile and share one env group. Migrations run before
+# every web deploy goes live (preDeployCommand → node migrate.js). No Render
+# Postgres is created — DATABASE_URL points at your existing DB (e.g. Neon).
+#
+# After "New > Blueprint" in Render, fill the `sync: false` secrets in the
+# "reservme" env group once. Both services read from it.
+#
+# NOTE: NEXT_PUBLIC_* are inlined into the client bundle at *build* time (see the
+# Dockerfile), where they default to the reservme.pro domains. If your public
+# domains differ, change them in the Dockerfile too (or pass build args) — the
+# runtime values below only affect server-side host routing.
+
+services:
+  - type: web
+    name: reservme-web
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    region: singapore
+    plan: starter
+    healthCheckPath: /api/healthz
+    preDeployCommand: node migrate.js
+    envVars:
+      - fromGroup: reservme
+
+  - type: worker
+    name: reservme-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    region: singapore
+    plan: starter
+    dockerCommand: node worker.js
+    envVars:
+      - fromGroup: reservme
+
+envVarGroups:
+  - name: reservme
+    envVars:
+      # Your Postgres connection string (e.g. Neon). Shared by web + worker.
+      - key: DATABASE_URL
+        sync: false
+      # 32+ byte secret for Better Auth session signing.
+      - key: BETTER_AUTH_SECRET
+        sync: false
+      # The app-host origin, e.g. https://app.reservme.pro
+      - key: BETTER_AUTH_URL
+        sync: false
+      # Host routing (read server-side at runtime). Match your real domains.
+      - key: NEXT_PUBLIC_APEX_HOST
+        value: reservme.pro
+      - key: NEXT_PUBLIC_APP_HOST
+        value: app.reservme.pro
+      - key: NEXT_PUBLIC_ADMIN_HOST
+        value: admin.reservme.pro
+      - key: NEXT_PUBLIC_PROTOCOL
+        value: https
+      # Transactional email (Resend). Without a key, mail is logged, not sent.
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        value: ReservMe <bookings@reservme.pro>
+      # Optional: Cloudflare Turnstile (booking bot protection) + Sentry (errors).
+      - key: TURNSTILE_SECRET
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
