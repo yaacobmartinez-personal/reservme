@@ -107,6 +107,13 @@ export default async function CustomersPage({
             >
               Export bookings
             </a>
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+            <a
+              href="/export/transactions"
+              className="rounded-pill border border-rule px-3 py-1.5 text-[0.8125rem] text-ink-2 transition-colors duration-[--dur-fast] ease-out hover:border-rule-strong hover:text-ink"
+            >
+              Export transactions
+            </a>
           </div>
         </header>
 

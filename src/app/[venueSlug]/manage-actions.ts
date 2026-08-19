@@ -7,6 +7,7 @@ import { getBookingForCancel } from "@/lib/booking/manage";
 import { cancelReservation, moveReservation } from "@/lib/booking/reserve";
 import { BookingError } from "@/lib/booking/errors";
 import { promoteWaitlistForReservation } from "@/lib/booking/waitlist";
+import { emitBookingEvent } from "@/lib/webhooks";
 import { rateLimit } from "@/lib/rate-limit";
 
 /**
@@ -35,6 +36,7 @@ export async function cancelBooking(formData: FormData): Promise<CancelResult> {
 
   try {
     await cancelReservation(booking.organizationId, booking.reservationId);
+    await emitBookingEvent(booking.organizationId, "booking.cancelled", booking.reservationId);
     // The freed slot may have someone waiting — notify the first in line.
     await promoteWaitlistForReservation(booking.organizationId, booking.reservationId);
   } catch (error) {

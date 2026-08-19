@@ -98,6 +98,8 @@ jobs:
         run: npx tsx scripts/test-engagement.ts
       - name: Memberships
         run: npx tsx scripts/test-memberships.ts
+      - name: Integrations
+        run: npx tsx scripts/test-integrations.ts
 
       # HTTP suites need the app running; start web + worker in the background.
       - name: Start app

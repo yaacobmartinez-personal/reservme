@@ -46,4 +46,5 @@ export const QUEUES = {
   billingReminders: "billing-reminders",
   loyaltyAccrual: "loyalty-accrual",
   engagement: "engagement",
+  webhookDelivery: "webhook-delivery",
 } as const;

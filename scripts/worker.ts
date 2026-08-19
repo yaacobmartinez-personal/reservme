@@ -16,6 +16,7 @@ import type { BookingJob } from "../src/lib/jobs/enqueue";
 import { sweepExpiredHolds } from "../src/lib/booking/reserve";
 import { sendBillingReminders } from "../src/lib/billing-reminders";
 import { accrueLoyalty, sendWinbacks, sendReviewRequests } from "../src/lib/engagement";
+import { deliverWebhook, type WebhookJob } from "../src/lib/webhooks";
 import { sendBookingConfirmation, sendBookingReminder } from "../src/lib/email/send-booking";
 import { pruneRateLimits } from "../src/lib/rate-limit";
 import { captureException, initObservability } from "../src/lib/observability";
@@ -33,6 +34,7 @@ async function main() {
   await boss.createQueue(QUEUES.billingReminders);
   await boss.createQueue(QUEUES.loyaltyAccrual);
   await boss.createQueue(QUEUES.engagement);
+  await boss.createQueue(QUEUES.webhookDelivery);
 
   // ── hold sweep ────────────────────────────────────────────────────
   await boss.work(QUEUES.holdSweep, async () => {
@@ -88,7 +90,13 @@ async function main() {
   // 10:00 daily (server time), after the billing nudge.
   await boss.schedule(QUEUES.engagement, "0 10 * * *");
 
-  console.log("[worker] running — hold-sweep every minute, email queues live, billing + engagement daily.");
+  // ── webhook delivery ──────────────────────────────────────────────
+  await boss.work<WebhookJob>(QUEUES.webhookDelivery, async ([job]) => {
+    await deliverWebhook(job.data); // throws on non-2xx → pg-boss retries
+    console.log(`[worker] webhook ${job.data.event} → ${job.data.url}`);
+  });
+
+  console.log("[worker] running — hold-sweep every minute, email queues live, billing + engagement daily, webhooks live.");
 }
 
 main().catch((error) => {

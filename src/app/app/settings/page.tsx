@@ -1,11 +1,16 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { sql } from "@/db";
+import { listApiKeys } from "@/lib/api-keys";
+import { appUrl } from "@/lib/env";
 import { getBranding, getClosures, getVenueSettings, listOwnerSpaces } from "@/lib/owner";
 import { listInvitations, listMembers } from "@/lib/team";
 import { requireVenue } from "@/lib/tenancy";
+import { listWebhooks } from "@/lib/webhooks";
 import { addClosure, removeClosure, updateVenueSettings } from "../actions";
 import { BrandingSection } from "./branding";
+import { IntegrationsSection } from "./integrations";
 import { TeamSection } from "./team";
 
 export const metadata: Metadata = { title: "Settings" };
@@ -31,15 +36,35 @@ const TIMEZONES = [
 
 export default async function SettingsPage() {
   const venue = await requireVenue();
-  const [settings, closures, spaces, branding, members, invites] = await Promise.all([
-    getVenueSettings(venue.organizationId),
-    getClosures(venue.organizationId, venue.timezone),
-    listOwnerSpaces(venue.organizationId),
-    getBranding(venue.organizationId),
-    listMembers(venue.organizationId),
-    listInvitations(venue.organizationId),
-  ]);
+  const [settings, closures, spaces, branding, members, invites, webhooks, apiKeys, icalRows] =
+    await Promise.all([
+      getVenueSettings(venue.organizationId),
+      getClosures(venue.organizationId, venue.timezone),
+      listOwnerSpaces(venue.organizationId),
+      getBranding(venue.organizationId),
+      listMembers(venue.organizationId),
+      listInvitations(venue.organizationId),
+      listWebhooks(venue.organizationId),
+      listApiKeys(venue.organizationId),
+      sql<{ ical_token: string }[]>`
+        SELECT ical_token FROM venue WHERE organization_id = ${venue.organizationId}
+      `,
+    ]);
   if (!settings) notFound();
+
+  const icalUrl = appUrl(`/api/calendar/${icalRows[0]?.ical_token ?? ""}`);
+  const fmtDate = (d: Date | null) =>
+    d
+      ? new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeZone: venue.timezone }).format(d)
+      : null;
+  const apiKeyViews = apiKeys.map((k) => ({
+    id: k.id,
+    name: k.name,
+    keyPrefix: k.keyPrefix,
+    lastUsedAt: fmtDate(k.lastUsedAt),
+    createdAt: fmtDate(k.createdAt) ?? "",
+    revokedAt: fmtDate(k.revokedAt),
+  }));
 
   return (
     <main className="flex-1 py-10 sm:py-14">
@@ -254,6 +279,18 @@ export default async function SettingsPage() {
             </Button>
           </form>
         </section>
+
+        <IntegrationsSection
+          icalUrl={icalUrl}
+          webhooks={webhooks.map((w) => ({
+            id: w.id,
+            url: w.url,
+            secret: w.secret,
+            events: w.events,
+            active: w.active,
+          }))}
+          apiKeys={apiKeyViews}
+        />
       </div>
     </main>
   );

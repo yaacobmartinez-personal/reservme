@@ -144,6 +144,8 @@ export const venue = pgTable("venue", {
   coverUrl: text("cover_url"),
   /** Engagement (0012): the owner's review link; review requests need it set. */
   reviewUrl: text("review_url"),
+  /** Integrations (0015): private token behind the read-only iCal feed. */
+  icalToken: uuid("ical_token").notNull().defaultRandom(),
   createdAt,
 });
 
@@ -503,6 +505,33 @@ export const membershipRedemption = pgTable("membership_redemption", {
   creditsUsed: integer("credits_used").notNull().default(0),
   discountCents: integer("discount_cents").notNull().default(0),
   createdAt,
+});
+
+/* ── Distribution & integrations (0015) ────────────────────────── */
+
+export const webhookEndpoint = pgTable("webhook_endpoint", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  url: text("url").notNull(),
+  secret: text("secret").notNull(),
+  events: text("events").array().notNull().default([]),
+  active: boolean("active").notNull().default(true),
+  createdAt,
+});
+
+export const apiKey = pgTable("api_key", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  keyPrefix: text("key_prefix").notNull(),
+  keyHash: text("key_hash").notNull(),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  createdAt,
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
 });
 
 export type PaymentMethod = "gcash_proof" | "paymongo" | "xendit" | "cash";

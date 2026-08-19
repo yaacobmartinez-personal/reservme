@@ -35,7 +35,8 @@
     "test:portfolio": "tsx --env-file=.env.local scripts/test-portfolio.ts",
     "test:promo": "tsx --env-file=.env.local scripts/test-promo.ts",
     "test:engagement": "tsx --env-file=.env.local scripts/test-engagement.ts",
-    "test:memberships": "tsx --env-file=.env.local scripts/test-memberships.ts"
+    "test:memberships": "tsx --env-file=.env.local scripts/test-memberships.ts",
+    "test:integrations": "tsx --env-file=.env.local scripts/test-integrations.ts"
   },
   "dependencies": {
     "@sentry/node": "^10.70.0",

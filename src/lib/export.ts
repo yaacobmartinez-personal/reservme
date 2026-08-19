@@ -100,3 +100,50 @@ export async function bookingsCsv(organizationId: string, timezone: string): Pro
     ]),
   );
 }
+
+/**
+ * Finance-oriented export for accounting: per booking, the gross price, the
+ * total discount applied (promo + membership), and the net charged.
+ */
+export async function transactionsCsv(
+  organizationId: string,
+  timezone: string,
+): Promise<string> {
+  const rows = await sql<
+    {
+      date: string;
+      reference: string;
+      space: string;
+      customer: string | null;
+      status: string;
+      net: number;
+      discount: number;
+    }[]
+  >`
+    SELECT to_char(r.starts_at AT TIME ZONE ${timezone}, 'YYYY-MM-DD') AS date,
+      r.reference, s.name AS space, c.name AS customer, r.status,
+      r.amount_cents AS net,
+      (COALESCE((SELECT sum(discount_cents) FROM promo_redemption pr WHERE pr.reservation_id = r.id), 0)
+      + COALESCE((SELECT sum(discount_cents) FROM membership_redemption mr WHERE mr.reservation_id = r.id), 0))::int AS discount
+    FROM reservation r
+    JOIN space s ON s.id = r.space_id
+    LEFT JOIN customer c ON c.id = r.customer_id
+    WHERE r.organization_id = ${organizationId}
+      AND r.kind IN ('rental','session_seat')
+    ORDER BY r.starts_at DESC
+    LIMIT 5000
+  `;
+  return toCsv(
+    ["Date", "Reference", "Customer", "Space", "Status", "Gross", "Discount", "Net"],
+    rows.map((r) => [
+      r.date,
+      r.reference,
+      r.customer ?? "Walk-in",
+      r.space,
+      r.status,
+      ((r.net + r.discount) / 100).toFixed(2),
+      (r.discount / 100).toFixed(2),
+      (r.net / 100).toFixed(2),
+    ]),
+  );
+}

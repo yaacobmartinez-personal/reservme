@@ -14,6 +14,7 @@ import {
 import { rateLimit } from "@/lib/rate-limit";
 import { consumePromo, validatePromo } from "@/lib/promo";
 import { redeemForBooking } from "@/lib/memberships";
+import { emitBookingEvent } from "@/lib/webhooks";
 import { sql } from "@/db";
 import { getVenueBySlug } from "@/lib/venue";
 
@@ -184,6 +185,7 @@ export async function bookSlot(
       };
       await enqueueBookingConfirmation(job);
       await scheduleBookingReminder(job, reservation.startsAt);
+      await emitBookingEvent(venue.organizationId, "booking.created", reservation.id);
     } catch (queueError) {
       // The booking is committed; a failed enqueue only costs the email. Record
       // it so a persistently broken queue is visible, but don't fail the user.

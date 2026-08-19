@@ -6,6 +6,7 @@ import { sql } from "@/db";
 import { BookingError } from "@/lib/booking/errors";
 import { listCustomers } from "@/lib/customers";
 import { redeemForBooking } from "@/lib/memberships";
+import { emitBookingEvent } from "@/lib/webhooks";
 import {
   bookRentalAsStaff,
   moveReservation as moveReservationEngine,
@@ -133,6 +134,8 @@ export async function createManualBooking(formData: FormData): Promise<BookingRe
         `;
       }
     }
+
+    await emitBookingEvent(venue.organizationId, "booking.created", booking.id);
 
     revalidatePath("/calendar");
     revalidatePath("/");
