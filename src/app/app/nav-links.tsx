@@ -124,6 +124,21 @@ const LINKS = [
     ),
   },
   {
+    href: "/payments",
+    label: "Payments",
+    icon: (
+      <Icon
+        path={
+          <>
+            <ellipse cx="10" cy="6" rx="6" ry="2.5" {...stroke} />
+            <path d="M4 6v4c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5V6" {...stroke} />
+            <path d="M4 10v4c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5v-4" {...stroke} />
+          </>
+        }
+      />
+    ),
+  },
+  {
     href: "/billing",
     label: "Billing",
     icon: (
