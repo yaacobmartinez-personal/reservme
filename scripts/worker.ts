@@ -14,7 +14,7 @@
 import { getBoss, QUEUES } from "../src/lib/jobs/boss";
 import type { BookingJob } from "../src/lib/jobs/enqueue";
 import { sweepExpiredHolds } from "../src/lib/booking/reserve";
-import { sendBillingReminders } from "../src/lib/billing-reminders";
+import { sendBillingReminders, suspendOverdue } from "../src/lib/billing-reminders";
 import { accrueLoyalty, sendWinbacks, sendReviewRequests } from "../src/lib/engagement";
 import { deliverWebhook, type WebhookJob } from "../src/lib/webhooks";
 import { sendBookingConfirmation, sendBookingReminder } from "../src/lib/email/send-booking";
@@ -66,6 +66,9 @@ async function main() {
     if (trialSoon || pastDue) {
       console.log(`[worker] billing reminders — ${trialSoon} ending soon, ${pastDue} past due`);
     }
+    // Then suspend anyone still unpaid past the grace period.
+    const suspended = await suspendOverdue();
+    if (suspended) console.log(`[worker] billing — suspended ${suspended} overdue venue(s)`);
   });
   // 09:00 daily (server time).
   await boss.schedule(QUEUES.billingReminders, "0 9 * * *");

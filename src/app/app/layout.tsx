@@ -46,6 +46,18 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
     if (state.pendingPayment) {
       return <BillingBanner kind="review" message="Payment received — under review. We’ll confirm shortly." />;
     }
+    if (state.suspended) {
+      return (
+        <BillingBanner
+          kind="due"
+          message={
+            price
+              ? `Your booking page is paused for non-payment — pay ${price} to bring it back online.`
+              : "Your booking page is paused for non-payment — contact us to reactivate."
+          }
+        />
+      );
+    }
     if (state.dueNow) {
       return (
         <BillingBanner

@@ -7,8 +7,22 @@ import { sql } from "@/db";
  * space for the off-season drops a band with no write. We store only trial /
  * subscription state and the InstaPay transfers owners submit for verification.
  *
- * Policy: we never auto-suspend on non-payment — flag and nudge only.
+ * Policy: we nudge relentlessly, then auto-suspend after a grace period. A
+ * venue whose free month (or paid period) lapses is emailed, and if still
+ * unpaid GRACE_DAYS later its public booking page is turned off — recorded on
+ * venue.suspended_at with BILLING_SUSPEND_REASON. Paying lifts that suspension;
+ * a manual/abuse suspension (any other reason) is never touched by billing.
  */
+
+/** Days a venue stays live after its free month / paid period ends. */
+export const GRACE_DAYS = 10;
+
+/**
+ * Marks a suspension the billing system created for non-payment. The exact
+ * string is the contract: an approved payment clears a suspension with this
+ * reason, and only this reason — so an admin's manual suspension survives.
+ */
+export const BILLING_SUSPEND_REASON = "Overdue — unpaid past the grace period";
 
 export type Band = { name: string; price: number | null };
 
@@ -33,6 +47,8 @@ export type BillingState = {
   /** Whole days until the trial ends (never negative); null once not trialing. */
   daysLeftInTrial: number | null;
   dueNow: boolean;
+  /** True once billing has turned the public page off for non-payment. */
+  suspended: boolean;
   /** band.price × 100, or null for the multi-site "quote" band. */
   amountDueCents: number | null;
   pendingPayment: PendingPayment | null;
@@ -45,6 +61,7 @@ type StateRow = {
   active_spaces: number;
   days_left: number;
   due_now: boolean;
+  suspended: boolean;
 };
 
 // Shared projection so getBillingState and listBilling agree on every rule (both
@@ -61,7 +78,8 @@ const STATE_COLUMNS = sql`
     (COALESCE(s.status, 'trialing') = 'trialing'
       AND now() > COALESCE(s.trial_ends_at, o.created_at + interval '1 month'))
     OR (s.status IN ('active','past_due') AND s.paid_until IS NOT NULL AND now() > s.paid_until)
-  ) AS due_now
+  ) AS due_now,
+  (v.suspended_at IS NOT NULL AND v.suspended_reason = ${BILLING_SUSPEND_REASON}) AS suspended
 `;
 
 function toState(row: StateRow, pending: PendingPayment | null): BillingState {
@@ -73,6 +91,7 @@ function toState(row: StateRow, pending: PendingPayment | null): BillingState {
     paidUntil: row.paid_until,
     daysLeftInTrial: row.status === "trialing" ? row.days_left : null,
     dueNow: row.due_now,
+    suspended: row.suspended,
     amountDueCents: band.price === null ? null : band.price * 100,
     pendingPayment: pending,
   };
@@ -83,12 +102,13 @@ export async function getBillingState(organizationId: string): Promise<BillingSt
     SELECT ${STATE_COLUMNS}
     FROM organization o
     LEFT JOIN subscription s ON s.organization_id = o.id
+    LEFT JOIN venue v ON v.organization_id = o.id
     WHERE o.id = ${organizationId}
   `;
   if (!row) {
     // Org doesn't exist — return a neutral trialing shape rather than throwing.
     return toState(
-      { status: "trialing", trial_ends_at: new Date(), paid_until: null, active_spaces: 0, days_left: 0, due_now: false },
+      { status: "trialing", trial_ends_at: new Date(), paid_until: null, active_spaces: 0, days_left: 0, due_now: false, suspended: false },
       null,
     );
   }
@@ -112,6 +132,18 @@ export async function getBillingState(organizationId: string): Promise<BillingSt
         }
       : null,
   );
+}
+
+/**
+ * Lifts a suspension the billing system created — called when a payment is
+ * approved or the venue is comped. Scoped to BILLING_SUSPEND_REASON, so an
+ * admin's manual suspension (abuse, etc.) is never cleared by a payment.
+ */
+export async function liftBillingSuspension(organizationId: string): Promise<void> {
+  await sql`
+    UPDATE venue SET suspended_at = NULL, suspended_reason = NULL
+    WHERE organization_id = ${organizationId} AND suspended_reason = ${BILLING_SUSPEND_REASON}
+  `;
 }
 
 export type BillingRow = BillingState & {

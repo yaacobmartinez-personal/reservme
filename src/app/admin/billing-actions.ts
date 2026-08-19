@@ -5,7 +5,7 @@ import { z } from "zod";
 import { sql } from "@/db";
 import { requirePlatformAdmin } from "@/lib/admin/access";
 import { recordAdminAction } from "@/lib/admin/audit";
-import { setPlatformSettings } from "@/lib/billing";
+import { liftBillingSuspension, setPlatformSettings } from "@/lib/billing";
 
 /**
  * Platform billing actions. Every one re-checks admin status server-side and is
@@ -42,6 +42,8 @@ export async function approveBillingPayment(formData: FormData) {
   });
 
   if (approved) {
+    // A verified payment brings a billing-suspended venue back online.
+    await liftBillingSuspension(approved.organization_id);
     await recordAdminAction({
       actorUserId: admin.userId,
       action: "admin.approved_payment",
@@ -87,6 +89,7 @@ export async function markPaidUntil(formData: FormData) {
        SET status = 'active', paid_until = (${date}::date + interval '1 day')::timestamptz, updated_at = now()
      WHERE organization_id = ${organizationId}
   `;
+  await liftBillingSuspension(organizationId);
 
   await recordAdminAction({
     actorUserId: admin.userId,
@@ -105,6 +108,7 @@ export async function compSubscription(formData: FormData) {
     UPDATE subscription SET status = 'comped', updated_at = now()
      WHERE organization_id = ${organizationId}
   `;
+  await liftBillingSuspension(organizationId);
   await recordAdminAction({
     actorUserId: admin.userId,
     action: "admin.comped",
