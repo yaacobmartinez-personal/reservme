@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
-import { authClient } from "@/lib/auth-client";
+import { adminAuthClient } from "@/lib/admin/auth-client";
 
 const FIELD =
   "h-11 w-full rounded-sm border border-rule bg-paper-2 px-3 text-[0.9375rem]";
@@ -20,7 +20,7 @@ export function AdminLoginForm() {
 
     const data = new FormData(event.currentTarget);
 
-    const { error: signInError } = await authClient.signIn.email({
+    const { error: signInError } = await adminAuthClient.signIn.email({
       email: String(data.get("email") ?? "").trim(),
       password: String(data.get("password") ?? ""),
     });
