@@ -396,6 +396,42 @@ export const platformSetting = pgTable("platform_setting", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/* ── Marketing (0011) ──────────────────────────────────────────── */
+
+export const promoCode = pgTable(
+  "promo_code",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    code: text("code").notNull(),
+    kind: text("kind").$type<"percent" | "amount">().notNull(),
+    value: integer("value").notNull(),
+    maxUses: integer("max_uses"),
+    uses: integer("uses").notNull().default(0),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    active: boolean("active").notNull().default(true),
+    createdAt,
+  },
+  (t) => [unique().on(t.organizationId, t.code)],
+);
+
+export const promoRedemption = pgTable("promo_redemption", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  promoCodeId: uuid("promo_code_id")
+    .notNull()
+    .references(() => promoCode.id, { onDelete: "cascade" }),
+  reservationId: uuid("reservation_id").references(() => reservation.id, {
+    onDelete: "set null",
+  }),
+  discountCents: integer("discount_cents").notNull(),
+  createdAt,
+});
+
 export type PaymentMethod = "gcash_proof" | "paymongo" | "xendit" | "cash";
 export type PaymentStatus = "awaiting" | "approved" | "rejected" | "refunded";
 

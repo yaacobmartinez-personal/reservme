@@ -12,6 +12,8 @@ import {
   scheduleBookingReminder,
 } from "@/lib/jobs/enqueue";
 import { rateLimit } from "@/lib/rate-limit";
+import { consumePromo, validatePromo } from "@/lib/promo";
+import { sql } from "@/db";
 import { getVenueBySlug } from "@/lib/venue";
 
 const bookingSchema = z.object({
@@ -22,6 +24,7 @@ const bookingSchema = z.object({
   name: z.string().trim().min(1, "Please give a name for the booking."),
   email: z.string().trim().email("That email doesn't look right."),
   phone: z.string().trim().optional(),
+  promo: z.string().trim().max(40).optional(),
   turnstileToken: z.string().optional(),
 });
 
@@ -87,6 +90,15 @@ export async function bookSlot(
     };
   }
 
+  // Validate the promo (if any) before writing the booking, so a bad code is a
+  // clean error rather than a committed reservation we then can't discount. The
+  // real claim happens atomically after the booking is made.
+  const promo = input.promo && input.promo.length > 0 ? input.promo : null;
+  if (promo) {
+    const check = await validatePromo(venue.organizationId, promo);
+    if (!check.ok) return { status: "error", message: check.reason };
+  }
+
   try {
     const reservation = await reserveSpace({
       organizationId: venue.organizationId,
@@ -95,6 +107,34 @@ export async function bookSlot(
       endsAt: input.endsAt,
       customer: { name: input.name, email: input.email, phone: input.phone },
     });
+
+    // Claim the promo now that the booking exists. This is atomic (uses+1 under
+    // the cap), so a code that raced to its limit between validation and here
+    // simply yields no discount — the booking still stands at full price.
+    if (promo) {
+      try {
+        const applied = await consumePromo(
+          venue.organizationId,
+          promo,
+          reservation.id,
+          reservation.amountCents,
+        );
+        if (applied && applied.discountCents > 0) {
+          await sql`
+            UPDATE reservation
+            SET amount_cents = GREATEST(0, amount_cents - ${applied.discountCents})
+            WHERE id = ${reservation.id}::uuid
+          `;
+        }
+      } catch (promoError) {
+        // The booking is committed; a promo hiccup must not fail the customer.
+        captureException(promoError, {
+          where: "bookSlot.promo",
+          reservationId: reservation.id,
+          organizationId: venue.organizationId,
+        });
+      }
+    }
 
     revalidatePath(`/${input.venueSlug}`);
 

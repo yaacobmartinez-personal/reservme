@@ -80,6 +80,20 @@ const LINKS = [
     ),
   },
   {
+    href: "/marketing",
+    label: "Marketing",
+    icon: (
+      <Icon
+        path={
+          <>
+            <path d="M3 8v4a1 1 0 0 0 1 1h1.5L8 16.5V3.5L5.5 7H4a1 1 0 0 0-1 1Z" {...stroke} />
+            <path d="M11 6.5c1.2.8 1.2 6.2 0 7M13.5 4.5c2.5 1.5 2.5 9.5 0 11" {...stroke} />
+          </>
+        }
+      />
+    ),
+  },
+  {
     href: "/spaces",
     label: "Spaces",
     icon: (

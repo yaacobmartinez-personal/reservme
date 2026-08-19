@@ -141,6 +141,18 @@ export function BookingForm({
                 className="h-11 rounded-sm border border-rule bg-card px-3 text-[0.9375rem]"
               />
             </label>
+            <label className="grid gap-1.5">
+              <span className="text-[0.875rem] text-ink-2">
+                Promo code <span className="text-ink-3">(optional)</span>
+              </span>
+              <input
+                name="promo"
+                autoComplete="off"
+                autoCapitalize="characters"
+                maxLength={40}
+                className="h-11 rounded-sm border border-rule bg-card px-3 font-mono text-[0.9375rem] uppercase tracking-wide"
+              />
+            </label>
           </div>
 
           {state.status === "error" ? (
