@@ -8,6 +8,7 @@ import { getTenant } from "@/lib/admin/queries";
 import { apexUrl } from "@/lib/env";
 import { formatMoney } from "@/lib/money";
 import { impersonate, reactivateVenue, suspendVenue } from "../../actions";
+import { EmailTenantForm } from "./email-form";
 
 export const metadata: Metadata = { title: "Tenant" };
 export const dynamic = "force-dynamic";
@@ -170,7 +171,13 @@ export default async function TenantPage({
           </section>
 
           <section>
-            <h2 className="text-xl">Recent bookings</h2>
+            <h2 className="text-xl">Email the owner</h2>
+            <p className="mt-1 text-[0.875rem] text-ink-3">
+              Sends to the venue owner and is recorded in the audit log.
+            </p>
+            <EmailTenantForm organizationId={tenant.organizationId} />
+
+            <h2 className="mt-8 text-xl">Recent bookings</h2>
             <ul className="mt-3 overflow-hidden rounded-lg border border-rule bg-card">
               {recentBookings.map((booking) => (
                 <li

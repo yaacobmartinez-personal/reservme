@@ -11,6 +11,7 @@ const ACTION_LABEL: Record<string, string> = {
   "admin.reactivated_venue": "Reactivated venue",
   "admin.impersonation_started": "Started viewing as",
   "admin.impersonation_ended": "Stopped viewing as",
+  "admin.emailed_tenant": "Emailed owner",
   "admin.granted_admin": "Granted platform admin",
   "admin.revoked_admin": "Revoked platform admin",
 };

@@ -14,7 +14,8 @@ export type AdminAction =
   | "admin.marked_paid"
   | "admin.comped"
   | "admin.cancelled_subscription"
-  | "admin.updated_billing_config";
+  | "admin.updated_billing_config"
+  | "admin.emailed_tenant";
 
 /**
  * Records a privileged action.
