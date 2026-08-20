@@ -1,0 +1,37 @@
+version: 2
+updates:
+  # Root app (Next.js, Drizzle, Better Auth, worker, …)
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # One PR for the routine minor/patch bumps; majors stay separate so
+      # breaking changes get their own review.
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  # Static marketing site (separate package + lockfile)
+  - package-ecosystem: npm
+    directory: "/marketing"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  # Keep the GitHub Actions in CI current
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns:
+          - "*"

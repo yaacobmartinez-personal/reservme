@@ -43,6 +43,11 @@ jobs:
 
       - run: npm ci
 
+      # Fail the build on a high/critical advisory. Moderates are surfaced but
+      # don't gate (today: 5 moderate, all transitive under better-auth).
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
+
       - name: Lint
         run: npx eslint src scripts test
 
