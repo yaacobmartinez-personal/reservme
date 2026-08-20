@@ -106,6 +106,12 @@ async function main() {
     check("no review requests without a review link", (await sendReviewRequests()) === 0);
 
     await sql`UPDATE venue SET review_url = 'https://g.page/r/example/review' WHERE organization_id = ${ORG}`;
+    // Only the fresh visit above (moved to 3–4h ago) should be review-eligible.
+    // The loyalty / win-back bookings sit right at the 72h review window, so
+    // whether they also qualify depends on the wall-clock hour of the run —
+    // exclude them explicitly so this count is deterministic.
+    await sql`UPDATE reservation SET review_requested_at = now()
+              WHERE organization_id = ${ORG} AND id <> ${visit}::uuid AND review_requested_at IS NULL`;
     const asked = await sendReviewRequests();
     check("a completed visit is asked once the link is set", asked === 1, `${asked}`);
     const [{ rq }] = await sql<{ rq: Date | null }[]>`SELECT review_requested_at AS rq FROM reservation WHERE id = ${visit}::uuid`;
