@@ -15,6 +15,8 @@ export type PublicVenue = {
   cancellationGraceHours: number;
   refundTerms: string | null;
   gcashName: string | null;
+  /** How far ahead customers may book — the date picker's ceiling. */
+  maxHorizonDays: number;
   /** Set by a platform admin. A suspended venue takes no new bookings. */
   suspendedAt: Date | null;
 };
@@ -45,13 +47,14 @@ export async function getVenueBySlug(slug: string): Promise<PublicVenue | null> 
       cancellation_grace_hours: number;
       refund_terms: string | null;
       gcash_name: string | null;
+      max_horizon_days: number;
       suspended_at: Date | null;
     }[]
   >`
     SELECT o.id AS organization_id, o.name, o.slug, o.logo,
            v.tagline, v.address, v.timezone, v.currency, v.theme, v.cover_url,
            v.cancellation_mode, v.cancellation_grace_hours, v.refund_terms,
-           v.gcash_name, v.suspended_at
+           v.gcash_name, v.max_horizon_days, v.suspended_at
     FROM organization o
     JOIN venue v ON v.organization_id = o.id
     WHERE o.slug = ${slug}
@@ -74,6 +77,7 @@ export async function getVenueBySlug(slug: string): Promise<PublicVenue | null> 
     cancellationGraceHours: row.cancellation_grace_hours,
     refundTerms: row.refund_terms,
     gcashName: row.gcash_name,
+    maxHorizonDays: row.max_horizon_days,
     suspendedAt: row.suspended_at,
   };
 }
@@ -106,18 +110,70 @@ export async function getVenueSpaces(organizationId: string): Promise<VenueSpace
 }
 
 /** The next `count` local dates for a venue, starting today in its own zone. */
-export async function getLocalDates(timezone: string, count: number) {
+export async function getLocalDates(timezone: string, count: number, startOffset = 0) {
   const rows = await sql<{ d: string; weekday: string; day: string }[]>`
     SELECT to_char(d, 'YYYY-MM-DD') AS d,
            to_char(d, 'Dy')          AS weekday,
            to_char(d, 'DD')          AS day
     FROM generate_series(
-      (now() AT TIME ZONE ${timezone})::date,
-      (now() AT TIME ZONE ${timezone})::date + ${count - 1}::int,
+      (now() AT TIME ZONE ${timezone})::date + ${startOffset}::int,
+      (now() AT TIME ZONE ${timezone})::date + ${startOffset + count - 1}::int,
       interval '1 day'
     ) AS d
   `;
   return rows;
+}
+
+export type DateWindow = {
+  /** Today in the venue's timezone (YYYY-MM-DD) — the date picker's floor. */
+  today: string;
+  /** today + horizon (YYYY-MM-DD) — the date picker's ceiling. */
+  maxDate: string;
+  /** The chosen day, clamped into [today, maxDate]. */
+  activeDate: string;
+  /** The visible week strip (up to 7 days, aligned to weeks from today). */
+  dates: Awaited<ReturnType<typeof getLocalDates>>;
+  /** First day of the previous/next week, or null at the bounds. */
+  prevWeekDate: string | null;
+  nextWeekDate: string | null;
+};
+
+/**
+ * A pageable week of dates plus the picker bounds. The strip is aligned to
+ * 7-day pages from today so picking a day doesn't scroll it; the customer jumps
+ * further out with the prev/next-week controls or the date picker, capped at the
+ * venue's booking horizon.
+ */
+export async function getDateWindow(
+  timezone: string,
+  horizonDays: number,
+  selected?: string,
+): Promise<DateWindow> {
+  const [{ today, max_date }] = await sql<{ today: string; max_date: string }[]>`
+    SELECT to_char((now() AT TIME ZONE ${timezone})::date, 'YYYY-MM-DD') AS today,
+           to_char((now() AT TIME ZONE ${timezone})::date + ${horizonDays}::int, 'YYYY-MM-DD') AS max_date
+  `;
+
+  const DAY = 86_400_000;
+  const base = Date.parse(today); // UTC midnight of the venue-local date
+  const iso = (offset: number) => new Date(base + offset * DAY).toISOString().slice(0, 10);
+
+  const rawOffset =
+    selected && /^\d{4}-\d{2}-\d{2}$/.test(selected)
+      ? Math.round((Date.parse(selected) - base) / DAY)
+      : 0;
+  const selOffset = Math.max(0, Math.min(horizonDays, rawOffset));
+  const weekStart = Math.floor(selOffset / 7) * 7;
+  const count = Math.min(7, horizonDays - weekStart + 1);
+
+  return {
+    today,
+    maxDate: max_date,
+    activeDate: iso(selOffset),
+    dates: await getLocalDates(timezone, count, weekStart),
+    prevWeekDate: weekStart > 0 ? iso(weekStart - 7) : null,
+    nextWeekDate: weekStart + 7 <= horizonDays ? iso(weekStart + 7) : null,
+  };
 }
 
 /** Today's run sheet for the dashboard, in the venue's own timezone. */

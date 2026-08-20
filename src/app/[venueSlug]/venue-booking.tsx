@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { formatMoney } from "@/lib/money";
 import type { getDayAvailability, getDaySessions } from "@/lib/booking/availability";
-import type { getLocalDates, getVenueSpaces } from "@/lib/venue";
+import type { DateWindow, getVenueSpaces } from "@/lib/venue";
 import { BookingForm } from "./booking-form";
+import { DateJump } from "./date-jump";
 import { WaitlistJoin } from "./waitlist-join";
 
 type Spaces = Awaited<ReturnType<typeof getVenueSpaces>>;
-type Dates = Awaited<ReturnType<typeof getLocalDates>>;
 type Slots = Awaited<ReturnType<typeof getDayAvailability>>;
 type Sessions = Awaited<ReturnType<typeof getDaySessions>>;
 
@@ -21,8 +21,7 @@ export function VenueBooking({
   currency,
   spaces,
   activeSpace,
-  dates,
-  activeDate,
+  dateWindow,
   slots,
   sessions,
   basePath,
@@ -31,12 +30,12 @@ export function VenueBooking({
   currency: string;
   spaces: Spaces;
   activeSpace: Spaces[number];
-  dates: Dates;
-  activeDate: string;
+  dateWindow: DateWindow;
   slots: Slots;
   sessions: Sessions;
   basePath: string;
 }) {
+  const { today, maxDate, activeDate, dates, prevWeekDate, nextWeekDate } = dateWindow;
   const linkFor = (next: { space?: string; date?: string }) => {
     const query = new URLSearchParams({
       space: next.space ?? activeSpace.slug,
@@ -72,28 +71,74 @@ export function VenueBooking({
           </nav>
         ) : null}
 
-        <nav aria-label="Dates" className="mt-5 grid grid-cols-7 gap-1.5">
-          {dates.map((date) => {
-            const active = date.d === activeDate;
-            return (
-              <Link
-                key={date.d}
-                href={linkFor({ date: date.d })}
-                aria-current={active ? "page" : undefined}
-                className={[
-                  "flex flex-col items-center gap-0.5 rounded-sm border py-2",
-                  "transition-colors duration-[--dur-fast] ease-out",
-                  active
-                    ? "border-ink bg-ink text-paper"
-                    : "border-rule bg-card text-ink-2 hover:border-rule-strong",
-                ].join(" ")}
-              >
-                <span className="label opacity-70">{date.weekday}</span>
-                <span className="font-mono text-[0.9375rem] leading-none">{date.day}</span>
-              </Link>
-            );
-          })}
-        </nav>
+        <div className="mt-5 flex items-center gap-1.5">
+          {prevWeekDate ? (
+            <Link
+              href={linkFor({ date: prevWeekDate })}
+              aria-label="Previous week"
+              className="flex size-9 shrink-0 items-center justify-center rounded-sm border border-rule text-ink-2 transition-colors duration-[--dur-fast] ease-out hover:border-rule-strong hover:text-ink"
+            >
+              ‹
+            </Link>
+          ) : (
+            <span
+              aria-hidden="true"
+              className="flex size-9 shrink-0 items-center justify-center rounded-sm border border-rule text-ink-3 opacity-40"
+            >
+              ‹
+            </span>
+          )}
+
+          <nav aria-label="Dates" className="grid flex-1 grid-cols-7 gap-1.5">
+            {dates.map((date) => {
+              const active = date.d === activeDate;
+              return (
+                <Link
+                  key={date.d}
+                  href={linkFor({ date: date.d })}
+                  aria-current={active ? "page" : undefined}
+                  className={[
+                    "flex flex-col items-center gap-0.5 rounded-sm border py-2",
+                    "transition-colors duration-[--dur-fast] ease-out",
+                    active
+                      ? "border-ink bg-ink text-paper"
+                      : "border-rule bg-card text-ink-2 hover:border-rule-strong",
+                  ].join(" ")}
+                >
+                  <span className="label opacity-70">{date.weekday}</span>
+                  <span className="font-mono text-[0.9375rem] leading-none">{date.day}</span>
+                </Link>
+              );
+            })}
+          </nav>
+
+          {nextWeekDate ? (
+            <Link
+              href={linkFor({ date: nextWeekDate })}
+              aria-label="Next week"
+              className="flex size-9 shrink-0 items-center justify-center rounded-sm border border-rule text-ink-2 transition-colors duration-[--dur-fast] ease-out hover:border-rule-strong hover:text-ink"
+            >
+              ›
+            </Link>
+          ) : (
+            <span
+              aria-hidden="true"
+              className="flex size-9 shrink-0 items-center justify-center rounded-sm border border-rule text-ink-3 opacity-40"
+            >
+              ›
+            </span>
+          )}
+        </div>
+
+        <div className="mt-3">
+          <DateJump
+            basePath={basePath}
+            spaceSlug={activeSpace.slug}
+            value={activeDate}
+            min={today}
+            max={maxDate}
+          />
+        </div>
 
         <p className="mt-5 flex items-baseline justify-between gap-3 border-t border-rule pt-5">
           <span className="text-[0.9375rem] font-medium">{activeSpace.name}</span>

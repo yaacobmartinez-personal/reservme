@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDayAvailability, getDaySessions } from "@/lib/booking/availability";
 import { sweepExpiredHolds } from "@/lib/booking/reserve";
-import { getLocalDates, getVenueBySlug, getVenueSpaces } from "@/lib/venue";
+import { getDateWindow, getVenueBySlug, getVenueSpaces } from "@/lib/venue";
 import { VenueBooking } from "./venue-booking";
 
 export const dynamic = "force-dynamic";
@@ -67,8 +67,8 @@ export default async function VenuePage({
   if (spaces.length === 0) notFound();
 
   const activeSpace = spaces.find((s) => s.slug === spaceParam) ?? spaces[0];
-  const dates = await getLocalDates(venue.timezone, 7);
-  const activeDate = dates.find((d) => d.d === dateParam)?.d ?? dates[0].d;
+  const dateWindow = await getDateWindow(venue.timezone, venue.maxHorizonDays, dateParam);
+  const activeDate = dateWindow.activeDate;
 
   const [slots, sessions] = await Promise.all([
     getDayAvailability(venue.organizationId, activeSpace.id, activeDate),
@@ -118,8 +118,7 @@ export default async function VenuePage({
             currency={venue.currency}
             spaces={spaces}
             activeSpace={activeSpace}
-            dates={dates}
-            activeDate={activeDate}
+            dateWindow={dateWindow}
             slots={slots}
             sessions={sessions}
             basePath={`/${venue.slug}`}
