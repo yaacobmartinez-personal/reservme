@@ -5,7 +5,7 @@ import { listOwnerSpaces } from "@/lib/owner";
 import { requireVenue } from "@/lib/tenancy";
 import { setSpaceActive } from "../actions";
 import { AddSpace } from "./space-forms";
-import { SpacePhoto } from "./space-photo";
+import { SpacePhoto } from "@/components/space-photo";
 
 export const metadata: Metadata = { title: "Spaces" };
 export const dynamic = "force-dynamic";

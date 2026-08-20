@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SpacePhoto } from "@/components/space-photo";
 import { formatMoney } from "@/lib/money";
 import type { getDayAvailability, getDaySessions } from "@/lib/booking/availability";
 import type { DateWindow, getVenueSpaces } from "@/lib/venue";
@@ -48,7 +49,7 @@ export function VenueBooking({
     <>
       <div className="rounded-xl border border-rule bg-card p-6 shadow-float sm:p-8">
         {spaces.length > 1 ? (
-          <nav aria-label="Spaces" className="flex flex-wrap gap-2">
+          <nav aria-label="Spaces" className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
             {spaces.map((space) => {
               const active = space.id === activeSpace.id;
               return (
@@ -57,14 +58,23 @@ export function VenueBooking({
                   href={linkFor({ space: space.slug })}
                   aria-current={active ? "page" : undefined}
                   className={[
-                    "whitespace-nowrap rounded-pill border px-3.5 py-1.5 text-[0.8125rem]",
-                    "transition-colors duration-[--dur-fast] ease-out",
+                    "overflow-hidden rounded-lg border bg-card transition-colors duration-[--dur-fast] ease-out",
                     active
-                      ? "border-ink bg-ink text-paper"
-                      : "border-rule bg-card text-ink-2 hover:border-rule-strong hover:text-ink",
+                      ? "border-ink ring-1 ring-ink"
+                      : "border-rule hover:border-rule-strong",
                   ].join(" ")}
                 >
-                  {space.name}
+                  <span className="block aspect-video overflow-hidden bg-paper-2">
+                    <SpacePhoto src={space.imageUrl} name={space.name} />
+                  </span>
+                  <span className="block px-3 py-2">
+                    <span className="block truncate text-[0.875rem] font-medium">
+                      {space.name}
+                    </span>
+                    <span className="block text-[0.75rem] text-ink-3">
+                      {formatMoney(space.priceCents, currency)} / {space.slotMinutes} min
+                    </span>
+                  </span>
                 </Link>
               );
             })}

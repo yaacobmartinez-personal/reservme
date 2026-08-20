@@ -3,7 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import { updateSpaceImage } from "../../actions";
 import { COVER_MAX_BYTES } from "@/lib/branding";
-import { SpacePhoto } from "../space-photo";
+import { SpacePhoto } from "@/components/space-photo";
 
 const KEEP = "__keep__";
 const ALLOWED = ["image/png", "image/jpeg", "image/webp"];

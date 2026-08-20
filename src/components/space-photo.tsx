@@ -1,7 +1,8 @@
 /**
  * A space's photo, or a themed default when it has none. Presentational and
- * server-safe — used by the Spaces cards and the edit-page uploader's empty
- * state. Fills its container; the caller sets the aspect ratio.
+ * server-safe — shared by the owner Spaces cards, the edit-page uploader, and
+ * the public booking widget's court cards. Fills its container; the caller sets
+ * the aspect ratio.
  */
 export function SpacePhoto({
   src,

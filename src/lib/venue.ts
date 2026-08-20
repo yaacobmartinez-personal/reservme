@@ -28,6 +28,7 @@ export type VenueSpace = {
   kind: string;
   priceCents: number;
   slotMinutes: number;
+  imageUrl: string | null;
 };
 
 export async function getVenueBySlug(slug: string): Promise<PublicVenue | null> {
@@ -91,9 +92,10 @@ export async function getVenueSpaces(organizationId: string): Promise<VenueSpace
       kind: string;
       price_cents: number;
       slot_minutes: number;
+      image_url: string | null;
     }[]
   >`
-    SELECT id, name, slug, kind, price_cents, slot_minutes
+    SELECT id, name, slug, kind, price_cents, slot_minutes, image_url
     FROM space
     WHERE organization_id = ${organizationId} AND is_active = true
     ORDER BY sort_order, name
@@ -106,6 +108,7 @@ export async function getVenueSpaces(organizationId: string): Promise<VenueSpace
     kind: row.kind,
     priceCents: row.price_cents,
     slotMinutes: row.slot_minutes,
+    imageUrl: row.image_url,
   }));
 }
 
