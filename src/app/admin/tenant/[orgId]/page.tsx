@@ -9,7 +9,7 @@ import { apexUrl } from "@/lib/env";
 import { formatMoney } from "@/lib/money";
 import { reactivateVenue, suspendVenue } from "../../actions";
 import { EmailTenantForm } from "./email-form";
-import { ImpersonateForm } from "./impersonate-form";
+import { impersonate } from "../../actions";
 
 export const metadata: Metadata = { title: "Tenant" };
 export const dynamic = "force-dynamic";
@@ -57,7 +57,21 @@ export default async function TenantPage({
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <ImpersonateForm organizationId={tenant.organizationId} />
+            <form action={impersonate}>
+              <input type="hidden" name="organizationId" value={tenant.organizationId} />
+              <input
+                type="text"
+                name="reason"
+                placeholder="Reason (logged)"
+                className="mr-2 h-10 w-48 rounded-sm border border-rule bg-card px-3 text-[0.875rem]"
+              />
+              <button
+                type="submit"
+                className="h-10 whitespace-nowrap rounded-pill bg-ink px-4 text-[0.875rem] font-medium text-paper transition-opacity duration-[--dur-fast] ease-out hover:opacity-90"
+              >
+                View as venue
+              </button>
+            </form>
 
             {tenant.suspendedAt ? (
               <form action={reactivateVenue}>

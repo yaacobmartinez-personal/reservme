@@ -7,6 +7,7 @@ import { formatMoney } from "@/lib/money";
 import { listUserVenues } from "@/lib/portfolio";
 import { currentVenue } from "@/lib/tenancy";
 import { BillingBanner } from "./billing-banner";
+import { stopViewing } from "./impersonation-actions";
 import { AppNavLinks } from "./nav-links";
 import { SignOutButton } from "./sign-out-button";
 import { VenueSwitcher } from "./venue-switcher";
@@ -84,9 +85,19 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
 
   const impersonation = venue.impersonatedBy ? (
     <div className="bg-clay text-paper">
-      <div className="px-5 py-2 text-[0.8125rem] sm:px-8">
-        You are viewing this venue as a platform admin. Changes you make are real
-        and are recorded.
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-2 text-[0.8125rem] sm:px-8">
+        <span>
+          Viewing <span className="font-medium">{venue.name}</span> as a platform admin —
+          changes are real and recorded.
+        </span>
+        <form action={stopViewing} className="ml-auto">
+          <button
+            type="submit"
+            className="whitespace-nowrap rounded-pill bg-paper px-3 py-1 text-[0.75rem] font-medium text-clay-ink transition-opacity duration-[--dur-fast] ease-out hover:opacity-85"
+          >
+            Stop viewing
+          </button>
+        </form>
       </div>
     </div>
   ) : null;
@@ -105,17 +116,21 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
         </div>
         <div className="border-t border-rule p-3">
           {venue.impersonatedBy ? (
-            <p className="truncate px-2 pb-2 text-[0.8125rem] text-ink-3">{venue.name}</p>
+            <p className="truncate px-2 text-[0.8125rem] text-ink-3">
+              Viewing {venue.name} as admin
+            </p>
           ) : (
-            <div className="pb-3">
-              <VenueSwitcher
-                currentOrgId={venue.organizationId}
-                currentName={venue.name}
-                venues={userVenues}
-              />
-            </div>
+            <>
+              <div className="pb-3">
+                <VenueSwitcher
+                  currentOrgId={venue.organizationId}
+                  currentName={venue.name}
+                  venues={userVenues}
+                />
+              </div>
+              <SignOutButton className="w-full" />
+            </>
           )}
-          <SignOutButton className="w-full" />
         </div>
       </aside>
 
@@ -129,7 +144,9 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
           <span className="ml-auto max-w-[9rem] truncate text-[0.8125rem] text-ink-3">
             {venue.name}
           </span>
-          <SignOutButton className="h-9 px-3.5 text-[0.875rem]" />
+          {venue.impersonatedBy ? null : (
+            <SignOutButton className="h-9 px-3.5 text-[0.875rem]" />
+          )}
         </header>
         <div className="overflow-x-auto border-b border-rule bg-paper-2 px-3 py-2 lg:hidden">
           <AppNavLinks orientation="horizontal" />

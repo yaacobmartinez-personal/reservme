@@ -115,7 +115,7 @@ export async function impersonate(formData: FormData) {
   const organizationId = orgId.parse(formData.get("organizationId"));
   const reason = String(formData.get("reason") ?? "").trim() || null;
 
-  await startImpersonation({
+  const token = await startImpersonation({
     adminUserId: admin.userId,
     organizationId,
     reason: reason ?? undefined,
@@ -128,26 +128,10 @@ export async function impersonate(formData: FormData) {
     detail: reason ? { reason } : undefined,
   });
 
-  // No server-side redirect: a Server Action redirect to the bare "/viewing"
-  // soft-navigates, and the client router matches it against the apex
-  // [venueSlug] route ("Venue not found") instead of the host-rewritten
-  // /admin/viewing. The client form navigates with router.push instead, which
-  // resolves correctly (the same path a nav-link click takes).
-}
-
-export async function stopImpersonating() {
-  const admin = await requirePlatformAdmin();
-  const ended = await endImpersonation();
-
-  if (ended) {
-    await recordAdminAction({
-      actorUserId: admin.userId,
-      action: "admin.impersonation_ended",
-      organizationId: ended.organizationId,
-    });
-  }
-
-  revalidatePath("/", "layout");
+  // Hand the token to the app host, which sets the impersonation cookie there
+  // and drops the admin into the tenant's *real* dashboard — every page they'd
+  // see, not just a copy. Cross-origin, so this is a full browser navigation.
+  redirect(appUrl(`/api/impersonate?token=${token}`));
 }
 
 export async function revokeAdmin(formData: FormData) {

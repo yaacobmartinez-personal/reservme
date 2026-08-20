@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { currentImpersonation } from "@/lib/admin/impersonation";
-import { stopImpersonating } from "./actions";
+import { AdminNavLinks } from "./nav-links";
+import { AdminSignOut } from "./admin-sign-out";
 
 export const metadata: Metadata = {
   title: { default: "Platform", template: "%s · ReservMe platform" },
@@ -9,66 +9,45 @@ export const metadata: Metadata = {
 };
 
 /**
- * The banner is not decoration. An admin who forgets they are impersonating is
- * one click from "fixing" the wrong venue's schedule, so it is rendered above
- * everything, on every page, for as long as the session is open.
+ * Platform console shell — a fixed sidebar on desktop, a compact top bar +
+ * horizontal nav on mobile, mirroring the owner app. Impersonation runs on the
+ * app host now (see /api/impersonate), so nothing venue-specific lives here.
  */
 export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
-  const impersonation = await currentImpersonation();
-
   return (
-    <>
-      {impersonation ? (
-        <div className="sticky top-0 z-50 bg-clay text-paper">
-          <div className="shell flex flex-wrap items-center gap-x-4 gap-y-2 py-2.5">
-            <span className="label">Viewing as</span>
-            <span className="min-w-0 flex-1 truncate text-[0.9375rem] font-medium">
-              {impersonation.organizationName}
-            </span>
-            <span className="font-mono text-[0.75rem] opacity-80">
-              until{" "}
-              {new Intl.DateTimeFormat("en-PH", {
-                hour: "2-digit",
-                minute: "2-digit",
-                hour12: false,
-              }).format(impersonation.expiresAt)}
-            </span>
-            <form action={stopImpersonating}>
-              <button
-                type="submit"
-                className="whitespace-nowrap rounded-pill bg-paper px-3.5 py-1.5 text-[0.8125rem] font-medium text-clay-ink transition-opacity duration-[--dur-fast] ease-out hover:opacity-85"
-              >
-                Stop viewing
-              </button>
-            </form>
-          </div>
-        </div>
-      ) : null}
-
-      <header className="border-b border-rule bg-paper-2">
-        <div className="shell flex items-center gap-6 py-4">
+    <div className="flex min-h-full">
+      {/* Desktop sidebar */}
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 flex-col border-r border-rule bg-paper-2 lg:flex">
+        <div className="px-5 py-5">
           <Link href="/" className="font-display text-lg">
             ReservMe <span className="text-ink-3">platform</span>
           </Link>
-          <nav aria-label="Platform" className="flex gap-1">
-            {[
-              { href: "/", label: "Tenants" },
-              { href: "/billing", label: "Billing" },
-              { href: "/audit", label: "Audit log" },
-            ].map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="rounded-pill px-3 py-1.5 text-[0.9375rem] text-ink-2 transition-colors duration-[--dur-fast] ease-out hover:bg-paper-3 hover:text-ink"
-              >
-                {link.label}
-              </Link>
-            ))}
-          </nav>
         </div>
-      </header>
+        <div className="flex-1 px-3">
+          <AdminNavLinks orientation="vertical" />
+        </div>
+        <div className="border-t border-rule p-3">
+          <AdminSignOut className="w-full" />
+        </div>
+      </aside>
 
-      {children}
-    </>
+      {/* Main column (offset by the sidebar on desktop) */}
+      <div className="flex min-w-0 flex-1 flex-col lg:pl-60">
+        {/* Mobile top bar + nav */}
+        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-rule bg-paper-2/95 px-4 py-3 backdrop-blur lg:hidden">
+          <Link href="/" className="shrink-0 font-display text-lg">
+            ReservMe <span className="text-ink-3">platform</span>
+          </Link>
+          <div className="ml-auto">
+            <AdminSignOut className="h-9 px-3.5 text-[0.8125rem]" />
+          </div>
+        </header>
+        <div className="overflow-x-auto border-b border-rule bg-paper-2 px-3 py-2 lg:hidden">
+          <AdminNavLinks orientation="horizontal" />
+        </div>
+
+        {children}
+      </div>
+    </div>
   );
 }
