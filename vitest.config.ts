@@ -29,6 +29,18 @@ export default defineConfig({
       include: ["src/lib/**", "src/db/**", "src/content/**"],
       exclude: ["src/**/*.test.ts", "**/*.d.ts"],
       reporter: ["text", "html", "lcov"],
+      // Enforce a floor so coverage can't silently rot — `test:coverage` (and CI)
+      // exit non-zero if any metric drops below. Statements/lines/functions hold
+      // 70+; branches sits lower (~61) because a chunk of the remaining branches
+      // are in request-context glue the unit suite can't reach (they're covered
+      // by the HTTP suites), so its floor is set to the level actually achievable
+      // here. Raise these as coverage climbs.
+      thresholds: {
+        statements: 70,
+        lines: 70,
+        functions: 70,
+        branches: 58,
+      },
     },
   },
 });
