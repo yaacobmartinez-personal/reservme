@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { requirePlatformAdmin } from "@/lib/admin/access";
 import { type BillingRow, instapayConfig, listBilling, listSubmittedPayments } from "@/lib/billing";
 import { formatMoney } from "@/lib/money";
+import { QrField } from "./qr-field";
 import {
   approveBillingPayment,
   compSubscription,
@@ -163,19 +164,11 @@ export default async function AdminBillingPage() {
         <section className="mt-10 max-w-xl rounded-xl border border-rule bg-card p-6 shadow-float">
           <h2 className="text-xl">ReservMe InstaPay details</h2>
           <p className="mt-1 text-[0.875rem] text-ink-3">
-            Shown to owners on their billing page. Paste a hosted image URL of the QR Ph code.
+            Shown to owners on their billing page. Upload the QR Ph code image or paste a hosted URL.
             {instapay.configured ? " Currently set." : " Not set — owners see a “contact us” message."}
           </p>
           <form action={updateBillingConfig} className="mt-5 grid gap-4">
-            <label className="grid gap-1.5 text-[0.875rem] text-ink-2">
-              <span>QR image URL</span>
-              <input
-                name="qrUrl"
-                defaultValue={instapay.qrUrl ?? ""}
-                placeholder="https://…/reservme-instapay.png"
-                className="h-11 w-full rounded-sm border border-rule bg-paper-2 px-3 text-[0.9375rem]"
-              />
-            </label>
+            <QrField initial={instapay.qrUrl} />
             <label className="grid gap-1.5 text-[0.875rem] text-ink-2">
               <span>Payee name</span>
               <input

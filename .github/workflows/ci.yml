@@ -104,6 +104,8 @@ jobs:
         run: npx tsx scripts/test-suspension.ts
       - name: Admin ops
         run: npx tsx scripts/test-admin-ops.ts
+      - name: Storage (R2 fallback)
+        run: npx tsx scripts/test-storage.ts
 
       # HTTP suites need the app running; start web + worker in the background.
       - name: Start app

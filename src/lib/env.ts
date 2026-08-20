@@ -9,6 +9,14 @@ const serverSchema = z.object({
   DATABASE_URL: z.string().url(),
   BETTER_AUTH_SECRET: z.string().min(32, "BETTER_AUTH_SECRET must be ≥32 chars"),
   BETTER_AUTH_URL: z.string().url(),
+
+  // Cloudflare R2 (optional). All five must be set to enable object storage;
+  // without them, images fall back to size-capped data URLs in the DB.
+  R2_ACCOUNT_ID: z.string().optional(),
+  R2_ACCESS_KEY_ID: z.string().optional(),
+  R2_SECRET_ACCESS_KEY: z.string().optional(),
+  R2_BUCKET: z.string().optional(),
+  R2_PUBLIC_URL: z.string().url().optional(),
 });
 
 let cached: z.infer<typeof serverSchema> | null = null;

@@ -40,9 +40,11 @@
     "test:memberships": "tsx --env-file=.env.development.local scripts/test-memberships.ts",
     "test:integrations": "tsx --env-file=.env.development.local scripts/test-integrations.ts",
     "test:suspension": "tsx --env-file=.env.development.local scripts/test-suspension.ts",
-    "test:admin-ops": "tsx --env-file=.env.development.local scripts/test-admin-ops.ts"
+    "test:admin-ops": "tsx --env-file=.env.development.local scripts/test-admin-ops.ts",
+    "test:storage": "tsx --env-file=.env.development.local scripts/test-storage.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1114.0",
     "@sentry/node": "^10.70.0",
     "better-auth": "^1.6.27",
     "drizzle-orm": "^0.45.2",

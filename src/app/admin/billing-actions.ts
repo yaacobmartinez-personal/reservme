@@ -5,7 +5,9 @@ import { z } from "zod";
 import { sql } from "@/db";
 import { requirePlatformAdmin } from "@/lib/admin/access";
 import { recordAdminAction } from "@/lib/admin/audit";
-import { liftBillingSuspension, setPlatformSettings } from "@/lib/billing";
+import { instapayConfig, liftBillingSuspension, setPlatformSettings } from "@/lib/billing";
+import { COVER_MAX_BYTES } from "@/lib/branding";
+import { dropImage, storeImage } from "@/lib/storage/r2";
 
 /**
  * Platform billing actions. Every one re-checks admin status server-side and is
@@ -136,7 +138,8 @@ export async function updateBillingConfig(formData: FormData) {
   const admin = await requirePlatformAdmin();
   const parsed = z
     .object({
-      qrUrl: z.string().trim().max(2000).optional().or(z.literal("")),
+      // Large cap so an uploaded QR image (a data URL) fits; a pasted URL is tiny.
+      qrUrl: z.string().trim().max(1_200_000).optional().or(z.literal("")),
       payee: z.string().trim().max(120).optional().or(z.literal("")),
       account: z.string().trim().max(120).optional().or(z.literal("")),
     })
@@ -146,14 +149,26 @@ export async function updateBillingConfig(formData: FormData) {
       account: formData.get("account") ?? "",
     });
 
+  // A pasted https URL passes through; an uploaded QR (data URL) goes to R2.
+  let qrUrl = parsed.qrUrl ?? "";
+  if (qrUrl.startsWith("data:")) {
+    const stored = await storeImage(qrUrl, "platform/instapay", COVER_MAX_BYTES);
+    if (!stored.ok) throw new Error(stored.error);
+    qrUrl = stored.url;
+  }
+
+  const before = await instapayConfig();
+
   await setPlatformSettings(
     {
-      instapay_qr_url: parsed.qrUrl ?? "",
+      instapay_qr_url: qrUrl,
       instapay_payee: parsed.payee ?? "",
       instapay_account: parsed.account ?? "",
     },
     admin.userId,
   );
+
+  if (before.qrUrl && before.qrUrl !== qrUrl) await dropImage(before.qrUrl);
 
   await recordAdminAction({
     actorUserId: admin.userId,

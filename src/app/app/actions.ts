@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { sql } from "@/db";
-import { COVER_MAX_BYTES, validateImageDataUrl } from "@/lib/branding";
+import { COVER_MAX_BYTES } from "@/lib/branding";
+import { dropImage, storeImage } from "@/lib/storage/r2";
 import { slugify } from "@/lib/slug";
 import { requireRole } from "@/lib/tenancy";
 
@@ -155,14 +156,19 @@ export async function updateSpaceImage(
   if (raw !== KEEP_IMAGE) {
     let imageUrl: string | null = null;
     if (raw !== "") {
-      const check = validateImageDataUrl(raw, COVER_MAX_BYTES);
-      if (!check.ok) return { ok: false, error: check.error };
-      imageUrl = raw;
+      const stored = await storeImage(raw, `orgs/${venue.organizationId}/spaces`, COVER_MAX_BYTES);
+      if (!stored.ok) return { ok: false, error: stored.error };
+      imageUrl = stored.url;
     }
+    const [old] = await sql<{ image_url: string | null }[]>`
+      SELECT image_url FROM space
+       WHERE id = ${spaceId}::uuid AND organization_id = ${venue.organizationId}
+    `;
     await sql`
       UPDATE space SET image_url = ${imageUrl}
        WHERE id = ${spaceId}::uuid AND organization_id = ${venue.organizationId}
     `;
+    if (old && old.image_url !== imageUrl) await dropImage(old.image_url);
   }
 
   revalidatePath("/spaces");
