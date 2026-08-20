@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { updateSpaceImage } from "../../actions";
-import { COVER_MAX_BYTES } from "@/lib/branding";
+import { COVER_MAX_BYTES, maxSizeLabel } from "@/lib/branding";
 import { SpacePhoto } from "@/components/space-photo";
 
 const KEEP = "__keep__";
@@ -17,7 +17,7 @@ function readImage(
   if (file.size > COVER_MAX_BYTES) {
     return Promise.resolve({
       ok: false,
-      error: `That image is too large (max ${Math.round(COVER_MAX_BYTES / 1024)} KB).`,
+      error: `That image is too large (max ${maxSizeLabel(COVER_MAX_BYTES)}).`,
     });
   }
   return new Promise((resolve) => {
@@ -75,7 +75,7 @@ export function SpaceImage({
     <section className="mt-6 rounded-xl border border-rule bg-card p-6 shadow-float sm:p-8">
       <h2 className="text-xl">Photo</h2>
       <p className="mt-1 text-[0.875rem] text-ink-3">
-        Shown on your Spaces list. PNG, JPEG or WebP, up to {Math.round(COVER_MAX_BYTES / 1024)}&nbsp;KB.
+        Shown on your Spaces list. PNG, JPEG or WebP, up to {maxSizeLabel(COVER_MAX_BYTES)}.
       </p>
 
       <div className="mt-5 flex flex-wrap items-center gap-5">

@@ -6,6 +6,7 @@ import {
   type Branding,
   COVER_MAX_BYTES,
   LOGO_MAX_BYTES,
+  maxSizeLabel,
   THEMES,
   type ThemeId,
 } from "@/lib/branding";
@@ -32,7 +33,7 @@ function readImage(
     return Promise.resolve({ ok: false, error: "Use a PNG, JPEG or WebP image." });
   }
   if (file.size > maxBytes) {
-    return Promise.resolve({ ok: false, error: `That image is too large (max ${Math.round(maxBytes / 1024)} KB).` });
+    return Promise.resolve({ ok: false, error: `That image is too large (max ${maxSizeLabel(maxBytes)}).` });
   }
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -107,7 +108,7 @@ export function BrandingSection({
     <section className="mt-8 rounded-xl border border-rule bg-card p-6 shadow-float sm:p-8">
       <h2 className="text-xl">Branding</h2>
       <p className="mt-1 text-[0.875rem] text-ink-3">
-        Make your booking page yours. PNG, JPEG or WebP · logo up to 128&nbsp;KB, cover up to 512&nbsp;KB.
+        Make your booking page yours. PNG, JPEG or WebP · up to {maxSizeLabel(LOGO_MAX_BYTES)} each.
       </p>
 
       <div className="mt-6 grid gap-8 lg:grid-cols-2">

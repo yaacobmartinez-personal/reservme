@@ -61,6 +61,34 @@ export default async function EmbedPage({
 
   return (
     <main data-brand={venue.theme} className="bg-paper p-3 sm:p-4">
+      {venue.coverUrl ? (
+        <div className="mb-3 overflow-hidden rounded-lg border border-rule">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={venue.coverUrl} alt="" className="h-24 w-full object-cover sm:h-28" />
+        </div>
+      ) : null}
+
+      <header className="mb-4 flex items-center gap-3">
+        {venue.logo ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={venue.logo}
+            alt={venue.name}
+            className="size-11 shrink-0 rounded-pill border border-rule object-cover"
+          />
+        ) : (
+          <span className="grid size-11 shrink-0 place-items-center rounded-pill bg-accent-soft font-display text-lg text-accent-ink">
+            {venue.name.charAt(0)}
+          </span>
+        )}
+        <div className="min-w-0">
+          <h1 className="truncate text-[1.0625rem] font-semibold leading-tight">{venue.name}</h1>
+          {venue.tagline ? (
+            <p className="truncate text-[0.8125rem] text-ink-3">{venue.tagline}</p>
+          ) : null}
+        </div>
+      </header>
+
       <VenueBooking
         venueSlug={venue.slug}
         currency={venue.currency}

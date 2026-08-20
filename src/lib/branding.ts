@@ -22,8 +22,15 @@ export function isTheme(value: unknown): value is ThemeId {
   return typeof value === "string" && THEME_IDS.has(value);
 }
 
-export const LOGO_MAX_BYTES = 128 * 1024;
-export const COVER_MAX_BYTES = 512 * 1024;
+export const LOGO_MAX_BYTES = 2 * 1024 * 1024;
+export const COVER_MAX_BYTES = 2 * 1024 * 1024;
+
+/** Human size label for limits/errors, e.g. "2 MB" or "512 KB". */
+export function maxSizeLabel(bytes: number): string {
+  return bytes >= 1024 * 1024
+    ? `${Math.round(bytes / (1024 * 1024))} MB`
+    : `${Math.round(bytes / 1024)} KB`;
+}
 
 // PNG/JPEG/WebP only. SVG is deliberately excluded — it can carry script and we
 // inject these straight into the public page.
@@ -44,7 +51,7 @@ export function validateImageDataUrl(value: string, maxBytes: number): ImageChec
   const bytes = Math.floor((b64.length * 3) / 4) - padding;
   if (bytes <= 0) return { ok: false, error: "That image is empty." };
   if (bytes > maxBytes) {
-    return { ok: false, error: `That image is too large (max ${Math.round(maxBytes / 1024)} KB).` };
+    return { ok: false, error: `That image is too large (max ${maxSizeLabel(maxBytes)}).` };
   }
   return { ok: true, bytes };
 }
