@@ -79,10 +79,40 @@ export function keyForUrl(url: string): string | null {
 }
 
 /**
+ * Uploads raw image bytes to R2 and returns a public URL, or — when R2 is
+ * unconfigured — returns an inline data URL so the caller stores it in the DB.
+ * The upload route calls this directly with the file; storeImage wraps it for
+ * the data-URL path.
+ */
+export async function putImageBytes(
+  bytes: Buffer,
+  contentType: string,
+  keyPrefix: string,
+): Promise<string> {
+  const cfg = config();
+  if (!cfg) return `data:${contentType};base64,${bytes.toString("base64")}`;
+
+  const ext = EXT[contentType] ?? "bin";
+  const key = `${keyPrefix.replace(/^\/+|\/+$/g, "")}/${crypto.randomUUID()}.${ext}`;
+  await client(cfg).send(
+    new PutObjectCommand({
+      Bucket: cfg.bucket,
+      Key: key,
+      Body: bytes,
+      ContentType: contentType,
+      // Content-addressed by a random key, so it can cache forever.
+      CacheControl: "public, max-age=31536000, immutable",
+    }),
+  );
+  return publicUrl(key);
+}
+
+/**
  * Persist a client image and return the string to store in the DB.
  * - a `data:` URL → uploaded to R2 (returns an https URL) when configured, else
  *   returned unchanged (stored inline);
- * - an `http(s)` URL → returned unchanged (a pasted/hosted image, e.g. a QR);
+ * - an `http(s)` URL → returned unchanged (a pasted/hosted image, or one the
+ *   upload route already put in R2).
  * Validation (mime allowlist + byte cap) always runs on data URLs.
  */
 export async function storeImage(
@@ -95,28 +125,10 @@ export async function storeImage(
   const check = validateImageDataUrl(value, maxBytes);
   if (!check.ok) return { ok: false, error: check.error };
 
-  const cfg = config();
-  if (!cfg) return { ok: true, url: value }; // fall back to inline data URL
-
   const match = /^data:([a-z]+\/[a-z0-9.+-]+);base64,(.+)$/i.exec(value.trim());
   if (!match) return { ok: false, error: "That doesn't look like an image file." };
-  const contentType = match[1];
-  const bytes = Buffer.from(match[2], "base64");
-  const ext = EXT[contentType] ?? "bin";
-  const key = `${keyPrefix.replace(/^\/+|\/+$/g, "")}/${crypto.randomUUID()}.${ext}`;
-
-  await client(cfg).send(
-    new PutObjectCommand({
-      Bucket: cfg.bucket,
-      Key: key,
-      Body: bytes,
-      ContentType: contentType,
-      // Content-addressed by a random key, so it can cache forever.
-      CacheControl: "public, max-age=31536000, immutable",
-    }),
-  );
-
-  return { ok: true, url: publicUrl(key) };
+  const url = await putImageBytes(Buffer.from(match[2], "base64"), match[1], keyPrefix);
+  return { ok: true, url };
 }
 
 /** Best-effort delete of a previously stored image (no-op unless it's ours). */

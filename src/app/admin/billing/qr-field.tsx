@@ -1,42 +1,28 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { uploadImage } from "@/lib/upload-client";
 
-const ALLOWED = ["image/png", "image/jpeg", "image/webp"];
 const MAX_BYTES = 512 * 1024;
 
-function readImage(
-  file: File,
-): Promise<{ ok: true; dataUrl: string } | { ok: false; error: string }> {
-  if (!ALLOWED.includes(file.type)) {
-    return Promise.resolve({ ok: false, error: "Use a PNG, JPEG or WebP image." });
-  }
-  if (file.size > MAX_BYTES) {
-    return Promise.resolve({ ok: false, error: "That image is too large (max 512 KB)." });
-  }
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve({ ok: true, dataUrl: String(reader.result) });
-    reader.onerror = () => resolve({ ok: false, error: "Couldn't read that file." });
-    reader.readAsDataURL(file);
-  });
-}
-
 /**
- * The InstaPay QR field: upload an image (→ stored in R2 on save) or paste a
- * hosted URL. Writes whichever to a hidden `qrUrl` input the form submits.
+ * The InstaPay QR field: upload an image (stored in R2 immediately) or paste a
+ * hosted URL. Writes whichever URL to a hidden `qrUrl` input the form submits.
  */
 export function QrField({ initial }: { initial: string | null }) {
   const [value, setValue] = useState(initial ?? "");
   const [error, setError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function pick(file: File | undefined) {
     if (!file) return;
     setError(null);
-    const r = await readImage(file);
+    setUploading(true);
+    const r = await uploadImage(file, "instapay", MAX_BYTES);
+    setUploading(false);
     if (!r.ok) return setError(r.error);
-    setValue(r.dataUrl);
+    setValue(r.url);
   }
 
   const hasImage = value.startsWith("data:") || /^https?:\/\//i.test(value);
@@ -69,8 +55,13 @@ export function QrField({ initial }: { initial: string | null }) {
             className="hidden"
             onChange={(e) => pick(e.target.files?.[0])}
           />
-          <button type="button" onClick={() => fileRef.current?.click()} className={btn}>
-            {hasImage ? "Replace image" : "Upload image"}
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading}
+            className={`${btn} disabled:opacity-45`}
+          >
+            {uploading ? "Uploading…" : hasImage ? "Replace image" : "Upload image"}
           </button>
           {value ? (
             <button

@@ -10,6 +10,7 @@ import {
   THEMES,
   type ThemeId,
 } from "@/lib/branding";
+import { uploadImage } from "@/lib/upload-client";
 
 const KEEP = "__keep__";
 
@@ -22,26 +23,6 @@ const SWATCH: Record<ThemeId, string> = {
   rose: "bg-swatch-rose",
   slate: "bg-swatch-slate",
 };
-
-const ALLOWED = ["image/png", "image/jpeg", "image/webp"];
-
-function readImage(
-  file: File,
-  maxBytes: number,
-): Promise<{ ok: true; dataUrl: string } | { ok: false; error: string }> {
-  if (!ALLOWED.includes(file.type)) {
-    return Promise.resolve({ ok: false, error: "Use a PNG, JPEG or WebP image." });
-  }
-  if (file.size > maxBytes) {
-    return Promise.resolve({ ok: false, error: `That image is too large (max ${maxSizeLabel(maxBytes)}).` });
-  }
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve({ ok: true, dataUrl: String(reader.result) });
-    reader.onerror = () => resolve({ ok: false, error: "Couldn't read that file." });
-    reader.readAsDataURL(file);
-  });
-}
 
 export function BrandingSection({
   initial,
@@ -59,6 +40,7 @@ export function BrandingSection({
   const [coverField, setCoverField] = useState<string>(initial.coverUrl ? KEEP : "");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [uploading, setUploading] = useState<null | "logo" | "cover">(null);
   const [pending, startTransition] = useTransition();
 
   const logoInput = useRef<HTMLInputElement>(null);
@@ -67,19 +49,23 @@ export function BrandingSection({
   async function pickLogo(file: File | undefined) {
     if (!file) return;
     setError(null);
-    const r = await readImage(file, LOGO_MAX_BYTES);
+    setUploading("logo");
+    const r = await uploadImage(file, "logo", LOGO_MAX_BYTES);
+    setUploading(null);
     if (!r.ok) return setError(r.error);
-    setLogoPreview(r.dataUrl);
-    setLogoField(r.dataUrl);
+    setLogoPreview(r.url);
+    setLogoField(r.url);
     setSaved(false);
   }
   async function pickCover(file: File | undefined) {
     if (!file) return;
     setError(null);
-    const r = await readImage(file, COVER_MAX_BYTES);
+    setUploading("cover");
+    const r = await uploadImage(file, "cover", COVER_MAX_BYTES);
+    setUploading(null);
     if (!r.ok) return setError(r.error);
-    setCoverPreview(r.dataUrl);
-    setCoverField(r.dataUrl);
+    setCoverPreview(r.url);
+    setCoverField(r.url);
     setSaved(false);
   }
 
@@ -160,8 +146,8 @@ export function BrandingSection({
                 className="hidden"
                 onChange={(e) => pickLogo(e.target.files?.[0])}
               />
-              <button type="button" onClick={() => logoInput.current?.click()} className={`${btn} border border-rule-strong text-ink-2 hover:border-ink hover:text-ink`}>
-                {logoPreview ? "Replace" : "Upload logo"}
+              <button type="button" onClick={() => logoInput.current?.click()} disabled={uploading === "logo"} className={`${btn} border border-rule-strong text-ink-2 hover:border-ink hover:text-ink disabled:opacity-45`}>
+                {uploading === "logo" ? "Uploading…" : logoPreview ? "Replace" : "Upload logo"}
               </button>
               {logoPreview ? (
                 <button
@@ -198,8 +184,8 @@ export function BrandingSection({
                 className="hidden"
                 onChange={(e) => pickCover(e.target.files?.[0])}
               />
-              <button type="button" onClick={() => coverInput.current?.click()} className={`${btn} border border-rule-strong text-ink-2 hover:border-ink hover:text-ink`}>
-                {coverPreview ? "Replace" : "Upload cover"}
+              <button type="button" onClick={() => coverInput.current?.click()} disabled={uploading === "cover"} className={`${btn} border border-rule-strong text-ink-2 hover:border-ink hover:text-ink disabled:opacity-45`}>
+                {uploading === "cover" ? "Uploading…" : coverPreview ? "Replace" : "Upload cover"}
               </button>
               {coverPreview ? (
                 <button

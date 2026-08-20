@@ -4,29 +4,9 @@ import { useRef, useState, useTransition } from "react";
 import { updateSpaceImage } from "../../actions";
 import { COVER_MAX_BYTES, maxSizeLabel } from "@/lib/branding";
 import { SpacePhoto } from "@/components/space-photo";
+import { uploadImage } from "@/lib/upload-client";
 
 const KEEP = "__keep__";
-const ALLOWED = ["image/png", "image/jpeg", "image/webp"];
-
-function readImage(
-  file: File,
-): Promise<{ ok: true; dataUrl: string } | { ok: false; error: string }> {
-  if (!ALLOWED.includes(file.type)) {
-    return Promise.resolve({ ok: false, error: "Use a PNG, JPEG or WebP image." });
-  }
-  if (file.size > COVER_MAX_BYTES) {
-    return Promise.resolve({
-      ok: false,
-      error: `That image is too large (max ${maxSizeLabel(COVER_MAX_BYTES)}).`,
-    });
-  }
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve({ ok: true, dataUrl: String(reader.result) });
-    reader.onerror = () => resolve({ ok: false, error: "Couldn't read that file." });
-    reader.readAsDataURL(file);
-  });
-}
 
 export function SpaceImage({
   spaceId,
@@ -41,16 +21,19 @@ export function SpaceImage({
   const [field, setField] = useState<string>(initial ? KEEP : "");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [pending, startTransition] = useTransition();
   const input = useRef<HTMLInputElement>(null);
 
   async function pick(file: File | undefined) {
     if (!file) return;
     setError(null);
-    const r = await readImage(file);
+    setUploading(true);
+    const r = await uploadImage(file, "space", COVER_MAX_BYTES);
+    setUploading(false);
     if (!r.ok) return setError(r.error);
-    setPreview(r.dataUrl);
-    setField(r.dataUrl);
+    setPreview(r.url);
+    setField(r.url);
     setSaved(false);
   }
 
@@ -95,9 +78,10 @@ export function SpaceImage({
             <button
               type="button"
               onClick={() => input.current?.click()}
-              className={`${btn} border border-rule-strong text-ink-2 hover:border-ink hover:text-ink`}
+              disabled={uploading}
+              className={`${btn} border border-rule-strong text-ink-2 hover:border-ink hover:text-ink disabled:opacity-45`}
             >
-              {preview ? "Replace" : "Upload photo"}
+              {uploading ? "Uploading…" : preview ? "Replace" : "Upload photo"}
             </button>
             {preview ? (
               <button
