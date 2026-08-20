@@ -5,6 +5,13 @@ const nextConfig: NextConfig = {
   // without node_modules. See Dockerfile.
   output: "standalone",
 
+  experimental: {
+    // Images (logo, cover, court photo, QR) are sent to Server Actions as base64
+    // data URLs, up to 2 MB each; branding submits logo + cover together. Base64
+    // adds ~33%, so lift the 1 MB default to comfortably fit both.
+    serverActions: { bodySizeLimit: "8mb" },
+  },
+
   async headers() {
     return [
       {
