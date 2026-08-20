@@ -6,6 +6,13 @@
  * not have them yet. Every number below is a product decision we control
  * (price, template count, commission rate) or a count derived from data on
  * this page — never a fabricated metric.
+ *
+ * INTENTIONAL DUPLICATE of `marketing/src/content/marketing.ts`. The apex
+ * marketing page renders inside this Next app; the standalone static export in
+ * `marketing/` is a *separate npm package* and can't import across the package
+ * boundary. The two files are kept in sync and differ ONLY in how AUTH links
+ * are wired: this copy uses `appUrl()` from `@/lib/env`; the standalone reads
+ * `NEXT_PUBLIC_APP_URL`. Change the copy here and mirror it there.
  */
 import { appUrl } from "@/lib/env";
 

@@ -6,6 +6,12 @@
  * not have them yet. Every number below is a product decision we control
  * (price, template count, commission rate) or a count derived from data on
  * this page — never a fabricated metric.
+ *
+ * INTENTIONAL DUPLICATE of the root app's `src/content/marketing.ts`. This is a
+ * *separate npm package* (the static marketing export) and can't import across
+ * the package boundary. The two files are kept in sync and differ ONLY in how
+ * AUTH links are wired: this copy reads `NEXT_PUBLIC_APP_URL`; the root copy
+ * uses `appUrl()` from `@/lib/env`. Change the copy there and mirror it here.
  */
 
 export const SITE = {
