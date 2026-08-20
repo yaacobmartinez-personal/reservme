@@ -49,7 +49,7 @@ jobs:
         run: npm audit --audit-level=high
 
       - name: Lint
-        run: npx eslint src scripts test
+        run: npx eslint src scripts test packages
 
       - name: Typecheck
         run: npx tsc --noEmit

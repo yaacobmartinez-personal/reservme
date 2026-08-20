@@ -6,9 +6,16 @@ can go live now, independently of the app.
 
 This is a standalone extract of the marketing surface from the main project so
 it can be hosted first while the app matures. When the app is ready to serve the
-apex itself, this can be retired or kept as the marketing front. Marketing copy
-and design tokens are duplicated from the root project for now; keep the two in
-step, or consolidate into a shared package later.
+apex itself, this can be retired or kept as the marketing front.
+
+Marketing copy lives in one place — `packages/marketing-content` at the repo
+root. This app's build is a walled-off static export and can't import across the
+package boundary, so `scripts/sync-shared-content.mjs` copies that source in as
+`src/content/_shared.ts` before every `dev`/`build` (the copy is committed too,
+so a marketing-only checkout still builds). Only `AUTH` (the sign-in /
+create-venue URLs) is wired locally, from `NEXT_PUBLIC_APP_URL`. Never edit
+`_shared.ts` by hand — `test/marketing-content.test.ts` in the root repo fails if
+the two ever drift.
 
 ## Develop
 

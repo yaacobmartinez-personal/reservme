@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "sync-content": "node scripts/sync-shared-content.mjs",
+    "predev": "node scripts/sync-shared-content.mjs",
+    "prebuild": "node scripts/sync-shared-content.mjs",
     "dev": "next dev",
     "build": "next build",
     "preview": "npx --yes serve@latest out -l 4000"
