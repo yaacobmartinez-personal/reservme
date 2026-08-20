@@ -1,6 +1,7 @@
 import { sql } from "@/db";
 import { sendEmail } from "@/lib/email/mailer";
 import { apexUrl } from "@/lib/env";
+import { type CustomerDetails, upsertCustomer } from "./customer";
 
 /**
  * Waitlist. A customer asks to be told if a taken slot frees; on a cancellation
@@ -8,29 +9,6 @@ import { apexUrl } from "@/lib/env";
  * notification, not an auto-hold — first to re-book wins, which keeps the
  * double-booking guarantee untouched (they go through the same reserve path).
  */
-
-type CustomerDetails = { name: string; email: string; phone?: string };
-
-async function upsertCustomer(organizationId: string, details: CustomerDetails): Promise<string> {
-  const email = details.email.trim().toLowerCase();
-  const name = details.name.trim();
-  const phone = details.phone?.trim() || null;
-
-  const [existing] = await sql<{ id: string }[]>`
-    SELECT id FROM customer WHERE organization_id = ${organizationId} AND email = ${email}`;
-  if (existing) return existing.id;
-
-  const [inserted] = await sql<{ id: string }[]>`
-    INSERT INTO customer (organization_id, name, email, phone)
-    VALUES (${organizationId}, ${name}, ${email}, ${phone})
-    ON CONFLICT (organization_id, email) DO NOTHING
-    RETURNING id`;
-  if (inserted) return inserted.id;
-
-  const [raced] = await sql<{ id: string }[]>`
-    SELECT id FROM customer WHERE organization_id = ${organizationId} AND email = ${email}`;
-  return raced.id;
-}
 
 export async function joinWaitlist(input: {
   organizationId: string;
