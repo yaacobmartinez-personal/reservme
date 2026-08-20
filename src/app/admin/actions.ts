@@ -1,12 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { sql } from "@/db";
 import { requirePlatformAdmin } from "@/lib/admin/access";
 import { recordAdminAction } from "@/lib/admin/audit";
-import { endImpersonation, startImpersonation } from "@/lib/admin/impersonation";
+import { startImpersonation } from "@/lib/admin/impersonation";
 import { sendEmail } from "@/lib/email/mailer";
+import { appUrl } from "@/lib/env";
 
 const orgId = z.string().min(1);
 

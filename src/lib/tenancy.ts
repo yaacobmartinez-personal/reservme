@@ -29,15 +29,14 @@ export type ActiveVenue = {
  * how cross-tenant leaks happen, and it only has to be got wrong once.
  */
 export async function currentVenue(): Promise<ActiveVenue | null> {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session?.user) return null;
-
-  // A platform admin impersonating a venue sees that venue instead of their
-  // own membership. currentImpersonation() re-validates the admin grant on
-  // every call, so a revoked admin loses this immediately rather than at the
-  // end of their session.
+  // A platform admin impersonating a venue sees that venue's real app. The
+  // impersonation cookie is a DB-validated bearer capability —
+  // currentImpersonation() re-checks the token, expiry and the admin grant on
+  // every call — so it needs no app-host login and a revoked admin loses it at
+  // once. Checked first, before any session, so it works on whichever host
+  // carries the cookie.
   const impersonation = await currentImpersonation();
-  if (impersonation && impersonation.adminUserId === session.user.id) {
+  if (impersonation) {
     const [venue] = await sql<
       { name: string; slug: string; timezone: string; currency: string }[]
     >`
@@ -65,6 +64,9 @@ export async function currentVenue(): Promise<ActiveVenue | null> {
       };
     }
   }
+
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session?.user) return null;
 
   // Fall back to the user's first membership when no org is active yet, so a
   // fresh login lands somewhere useful instead of a chooser.

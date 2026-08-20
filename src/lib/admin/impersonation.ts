@@ -27,7 +27,15 @@ export type Impersonation = {
 export async function currentImpersonation(): Promise<Impersonation | null> {
   const token = (await cookies()).get(IMPERSONATION_COOKIE)?.value;
   if (!token) return null;
+  return resolveImpersonation(token);
+}
 
+/**
+ * Validates an impersonation token against the database — active, unexpired, and
+ * the admin's grant still live. Shared by the cookie reader and the app-host
+ * hand-off route, so a token is trusted the same way wherever it arrives.
+ */
+export async function resolveImpersonation(token: string): Promise<Impersonation | null> {
   const [row] = await sql<
     {
       token: string;
@@ -89,6 +97,15 @@ export async function startImpersonation(input: {
     )
   `;
 
+  // The cookie is not set here: it is set on the APP host by the hand-off route
+  // (/api/impersonate), so a platform admin views the tenant's real dashboard
+  // there. Keeping it host-only on the app host means the apex booking pages
+  // never carry it.
+  return token;
+}
+
+/** Sets the impersonation cookie on the current host (the app-host hand-off). */
+export async function setImpersonationCookie(token: string): Promise<void> {
   (await cookies()).set(IMPERSONATION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
@@ -96,8 +113,6 @@ export async function startImpersonation(input: {
     path: "/",
     maxAge: IMPERSONATION_MINUTES * 60,
   });
-
-  return token;
 }
 
 export async function endImpersonation(): Promise<Impersonation | null> {
