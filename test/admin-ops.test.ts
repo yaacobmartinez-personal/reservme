@@ -7,6 +7,7 @@
  *   npm run test:admin-ops   (local: DATABASE_URL → docker, not Neon)
  */
 import postgres from "postgres";
+import { expect, it } from "vitest";
 
 const IDS = [
   "org_ao_ending", "org_ao_far", "org_ao_grace", "org_ao_susp", "org_ao_comp",
@@ -113,10 +114,9 @@ async function main() {
     await sql`DELETE FROM organization WHERE id IN ${sql(IDS)}`;
     await sql.end();
   }
-  process.exit(failures === 0 ? 0 : 1);
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+it("admin ops: billing radar + growth metrics", async () => {
+  await main();
+  expect(failures, "one or more checks failed").toBe(0);
+}, 30_000);

@@ -1,0 +1,29 @@
+# A throwaway Postgres for the test suite — mirrors CI's postgres:17-alpine on
+# 5433, but ephemeral (tmpfs, no named volume), so a test run never touches your
+# dev database. Use it as an alternative to `docker compose up -d postgres`:
+#
+#   docker compose -f docker-compose.test.yml up -d
+#   npm run test:coverage
+#   docker compose -f docker-compose.test.yml down
+#
+# Uses the same port (5433) as the dev DB, so run one or the other, not both.
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: reservme-postgres-test
+    environment:
+      POSTGRES_USER: reservme
+      POSTGRES_PASSWORD: reservme_dev_password
+      POSTGRES_DB: reservme
+      TZ: UTC
+      PGTZ: UTC
+    ports:
+      - "5433:5432"
+    # Ephemeral: data lives in RAM and is discarded on `down`.
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reservme -d reservme"]
+      interval: 5s
+      timeout: 5s
+      retries: 10

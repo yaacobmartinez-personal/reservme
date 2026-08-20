@@ -57,9 +57,13 @@ jobs:
           npx tsx scripts/migrate.ts
           npx tsx scripts/seed.ts
 
-      # Engine-level suites need only the database.
-      - name: Booking concurrency
-        run: npx tsx scripts/test-concurrency.ts
+      # The Vitest suite (booking concurrency, promo, engagement, memberships,
+      # integrations, suspension, admin ops, storage) with coverage. It migrates
+      # + seeds itself, so it also stands alone from a fresh clone.
+      - name: Vitest (+ coverage)
+        run: npm run test:coverage
+
+      # Engine-level suites still on standalone scripts; DB only.
       - name: Booking management
         run: npx tsx scripts/test-manage.ts
       - name: Rate limiting
@@ -92,20 +96,6 @@ jobs:
         run: npx tsx scripts/test-sessions.ts
       - name: Portfolio
         run: npx tsx scripts/test-portfolio.ts
-      - name: Promo codes
-        run: npx tsx scripts/test-promo.ts
-      - name: Engagement + loyalty
-        run: npx tsx scripts/test-engagement.ts
-      - name: Memberships
-        run: npx tsx scripts/test-memberships.ts
-      - name: Integrations
-        run: npx tsx scripts/test-integrations.ts
-      - name: Billing suspension
-        run: npx tsx scripts/test-suspension.ts
-      - name: Admin ops
-        run: npx tsx scripts/test-admin-ops.ts
-      - name: Storage (R2 fallback)
-        run: npx tsx scripts/test-storage.ts
 
       # HTTP suites need the app running; start web + worker in the background.
       - name: Start app

@@ -14,6 +14,7 @@
 import crypto from "node:crypto";
 import http from "node:http";
 import postgres from "postgres";
+import { expect, it } from "vitest";
 
 const ORG = "org_integ_test";
 const OTHER = "org_integ_other";
@@ -159,10 +160,9 @@ async function main() {
     await sql`DELETE FROM organization WHERE id IN (${ORG}, ${OTHER})`;
     await sql.end();
   }
-  process.exit(failures === 0 ? 0 : 1);
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+it("distribution & integrations", async () => {
+  await main();
+  expect(failures, "one or more checks failed").toBe(0);
+}, 30_000);

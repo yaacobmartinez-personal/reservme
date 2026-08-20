@@ -7,6 +7,7 @@
  *   npm run test:promo      (local: DATABASE_URL → docker, not Neon)
  */
 import postgres from "postgres";
+import { expect, it } from "vitest";
 
 const ORG = "org_promo_test";
 const TZ = "Asia/Manila";
@@ -96,10 +97,9 @@ async function main() {
     await sql`DELETE FROM organization WHERE id = ${ORG}`;
     await sql.end();
   }
-  process.exit(failures === 0 ? 0 : 1);
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+it("promo codes", async () => {
+  await main();
+  expect(failures, "one or more checks failed").toBe(0);
+}, 30_000);

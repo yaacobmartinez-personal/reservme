@@ -1,3 +1,4 @@
+import { expect, it } from "vitest";
 /**
  * Verifies the R2 storage layer. Environment-aware:
  *   - R2 unset (CI default): storeImage keeps a data URL inline (fallback).
@@ -68,10 +69,9 @@ async function main() {
       ? "\nStorage verified.\n"
       : `\n${failures} check(s) FAILED.\n`,
   );
-  process.exit(failures === 0 ? 0 : 1);
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+it("R2 storage", async () => {
+  await main();
+  expect(failures, "one or more checks failed").toBe(0);
+}, 30_000);

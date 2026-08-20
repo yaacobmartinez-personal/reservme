@@ -243,23 +243,44 @@ and passes, weekly regulars, no-show flagging, staff invitations, branding
 upload, and CSV export. See [`docs/launch-readiness.md`](docs/launch-readiness.md)
 for the full gap list and sequencing.
 
+## Running tests
+
+The suite runs on **Vitest** against a real Postgres (the booking-concurrency
+test fires 24 genuinely parallel writes, so it needs a real database). From a
+fresh clone:
+
+```bash
+docker compose up -d postgres        # start the DB (port 5433)
+npm ci
+npm test                             # or: npm run test:coverage
+```
+
+`npm test` needs no `.env` file — the runner defaults to the docker DB and
+migrates + seeds automatically before the suite (see `test/`). One command that
+brings the DB up and runs the whole thing with coverage:
+
+```bash
+npm run test:ci
+```
+
+For a throwaway DB that never touches your dev volume, use
+`docker compose -f docker-compose.test.yml up -d` instead (same port, ephemeral).
+
+Scripts: `npm test` (run once) · `npm run test:watch` · `npm run test:coverage`
+(v8 coverage over `src/`) · `npm run test:ci` (DB up + coverage).
+
+A handful of end-to-end suites still run as standalone scripts against the dev
+DB (`npm run test:onboarding`, `test:admin`, `test:jobs` — the last also needs
+`npm run worker`); these are being folded into Vitest.
+
+CI (`.github/workflows/ci.yml`) runs lint + typecheck + build + `npm run
+test:coverage` against a throwaway Postgres on every push and PR.
+
 ## Checks
 
 ```bash
-npm run build && npx eslint src scripts && npm run test:booking
+npm run build && npx eslint src scripts && npm test
 ```
-
-Test scripts (the DB must be up; `test:jobs` also needs `npm run worker`):
-
-- `test:booking` — concurrency: a slot can't be sold twice
-- `test:manage` — run-sheet transitions: check-in / no-show / cancel
-- `test:ratelimit` — the booking endpoint can't be flooded
-- `test:onboarding` — an empty venue becomes bookable through the owner surface
-- `test:admin` — the platform console refuses everyone it should
-- `test:jobs` — booking → queue → worker → email pipeline
-
-CI (`.github/workflows/ci.yml`) runs lint + typecheck + build + all six suites
-against a throwaway Postgres on every push and PR.
 
 ## Deploying
 

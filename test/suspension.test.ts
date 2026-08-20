@@ -8,6 +8,7 @@
  *   npm run test:suspension   (local: DATABASE_URL → docker, not Neon)
  */
 import postgres from "postgres";
+import { expect, it } from "vitest";
 
 const IDS = ["org_susp_a", "org_susp_b", "org_susp_c", "org_susp_d", "org_susp_e", "org_susp_f"];
 let failures = 0;
@@ -88,10 +89,9 @@ async function main() {
     await sql`DELETE FROM organization WHERE id IN ${sql(IDS)}`;
     await sql.end();
   }
-  process.exit(failures === 0 ? 0 : 1);
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+it("billing auto-suspension", async () => {
+  await main();
+  expect(failures, "one or more checks failed").toBe(0);
+}, 30_000);

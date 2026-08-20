@@ -9,6 +9,7 @@
  */
 import postgres from "postgres";
 import { BookingError } from "../src/lib/booking/errors";
+import { expect, it } from "vitest";
 
 const ORG_ID = "org_katipunan";
 const RACERS = 24;
@@ -129,8 +130,7 @@ async function main() {
     /* ── 3 · Cancelling frees the slot ─────────────────────────── */
 
     if (won.length !== 1) {
-      console.log("\nNo single winner — skipping the remaining checks.\n");
-      process.exit(1);
+      throw new Error("No single winner — the race model is broken.");
     }
 
     const winner = (won[0] as PromiseFulfilledResult<{ id: string }>).value;
@@ -227,11 +227,9 @@ async function main() {
   } finally {
     await sql.end();
   }
-
-  process.exit(failures === 0 ? 0 : 1);
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+it("a booked slot cannot be sold twice", async () => {
+  await main();
+  expect(failures, "one or more checks failed").toBe(0);
+}, 30_000);
