@@ -71,13 +71,13 @@ export async function createPlan(
 
 export async function setPlanActive(formData: FormData) {
   const venue = await requireRole(...MANAGE);
-  const id = String(formData.get("id") ?? "");
+  const id = z.string().uuid().safeParse(formData.get("id"));
   const active = formData.get("active") === "true";
-  if (!id) return;
+  if (!id.success) return;
 
   await sql`
     UPDATE membership_plan SET active = ${active}
-    WHERE id = ${id}::uuid AND organization_id = ${venue.organizationId}
+    WHERE id = ${id.data}::uuid AND organization_id = ${venue.organizationId}
   `;
   revalidatePath("/memberships");
 }

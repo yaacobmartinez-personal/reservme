@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { sql } from "@/db";
 import { COVER_MAX_BYTES, isTheme, LOGO_MAX_BYTES } from "@/lib/branding";
 import { dropImage, storeImage } from "@/lib/storage/r2";
@@ -19,6 +20,17 @@ export type BrandingResult = { ok: true } | { ok: false; error: string };
 
 const KEEP = "__keep__";
 
+/**
+ * Request-boundary validation. The theme must be a known theme; the image
+ * fields are opaque strings here (a data URL, an existing R2 URL, "" to clear,
+ * or the KEEP sentinel) — storeImage does the mime + size gate on any new one.
+ */
+const brandingForm = z.object({
+  theme: z.string().refine(isTheme, "unknown theme").default("pine"),
+  logo: z.string().default(KEEP),
+  cover: z.string().default(KEEP),
+});
+
 /** Resolve a submitted image field to: keep (undefined) / clear (null) / a new value. */
 async function resolveImage(
   raw: string,
@@ -36,12 +48,17 @@ export async function updateBranding(formData: FormData): Promise<BrandingResult
   const venue = await requireRole("owner", "admin");
   const org = venue.organizationId;
 
-  const theme = String(formData.get("theme") ?? "pine");
-  if (!isTheme(theme)) return { ok: false, error: "Please choose a theme." };
+  const parsed = brandingForm.safeParse({
+    theme: formData.get("theme") ?? undefined,
+    logo: formData.get("logo") ?? undefined,
+    cover: formData.get("cover") ?? undefined,
+  });
+  if (!parsed.success) return { ok: false, error: "Please choose a valid theme." };
+  const { theme, logo, cover } = parsed.data;
 
-  const logoResolved = await resolveImage(String(formData.get("logo") ?? KEEP), LOGO_MAX_BYTES, `orgs/${org}/logo`);
+  const logoResolved = await resolveImage(logo, LOGO_MAX_BYTES, `orgs/${org}/logo`);
   if ("error" in logoResolved) return { ok: false, error: logoResolved.error };
-  const coverResolved = await resolveImage(String(formData.get("cover") ?? KEEP), COVER_MAX_BYTES, `orgs/${org}/cover`);
+  const coverResolved = await resolveImage(cover, COVER_MAX_BYTES, `orgs/${org}/cover`);
   if ("error" in coverResolved) return { ok: false, error: coverResolved.error };
 
   const [oldLogoRow] = await sql<{ logo: string | null }[]>`SELECT logo FROM organization WHERE id = ${org}`;

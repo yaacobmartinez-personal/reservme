@@ -106,13 +106,13 @@ export async function updateReviewUrl(
 
 export async function setPromoActive(formData: FormData) {
   const venue = await requireRole("owner", "admin");
-  const id = String(formData.get("id") ?? "");
+  const id = z.string().uuid().safeParse(formData.get("id"));
   const active = formData.get("active") === "true";
-  if (!id) return;
+  if (!id.success) return;
 
   await sql`
     UPDATE promo_code SET active = ${active}
-    WHERE id = ${id}::uuid AND organization_id = ${venue.organizationId}
+    WHERE id = ${id.data}::uuid AND organization_id = ${venue.organizationId}
   `;
   revalidatePath("/marketing");
 }

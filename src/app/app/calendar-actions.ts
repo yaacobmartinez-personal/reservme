@@ -232,7 +232,9 @@ export type CustomerHit = { id: string; name: string; email: string; phone: stri
 /** Typeahead for the booking panel — the top matches for a query, in-org. */
 export async function searchCustomers(query: string): Promise<CustomerHit[]> {
   const venue = await requireVenue();
-  const q = query.trim();
+  const parsed = z.string().max(200).safeParse(query);
+  if (!parsed.success) return [];
+  const q = parsed.data.trim();
   if (q.length < 1) return [];
   const { rows } = await listCustomers(venue.organizationId, venue.timezone, {
     search: q,
