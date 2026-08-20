@@ -283,6 +283,12 @@ test:coverage` against a throwaway Postgres on every push and PR.
 npm run build && npx eslint src scripts test && npm test
 ```
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the setup, the test workflow, and the
+commit conventions (one feature/fix per commit, landing with its test). Notable
+changes are recorded in [CHANGELOG.md](CHANGELOG.md).
+
 ## Deploying
 
 `Dockerfile` builds one standalone image that runs either surface:
