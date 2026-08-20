@@ -268,7 +268,9 @@ For a throwaway DB that never touches your dev volume, use
 `docker compose -f docker-compose.test.yml up -d` instead (same port, ephemeral).
 
 Scripts: `npm test` (run once) · `npm run test:watch` · `npm run test:coverage`
-(v8 coverage over `src/`) · `npm run test:ci` (DB up + coverage).
+(v8 coverage of the logic layer — `src/lib`, `src/db`, `src/content`; the
+Next.js UI and route handlers are covered by the HTTP suites and browser
+walkthroughs, not unit tests) · `npm run test:ci` (DB up + coverage).
 
 A handful of end-to-end suites still run as standalone scripts against the dev
 DB (`npm run test:onboarding`, `test:admin`, `test:jobs` — the last also needs

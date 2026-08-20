@@ -19,7 +19,14 @@ export default defineConfig({
     hookTimeout: 60_000,
     coverage: {
       provider: "v8",
-      include: ["src/**"],
+      // Coverage measures the framework-independent logic layer this unit suite
+      // is responsible for: src/lib (booking engine, tenancy, billing, email,
+      // storage, admin), src/db (schema + connection), and src/content. The
+      // Next.js surface — src/app pages/layouts/route handlers/Server Actions and
+      // src/components React UI — is exercised by the HTTP suites (test:onboarding,
+      // test:admin, test:jobs) and browser walkthroughs, not by unit tests, so
+      // counting it here would only misreport what this suite covers.
+      include: ["src/lib/**", "src/db/**", "src/content/**"],
       exclude: ["src/**/*.test.ts", "**/*.d.ts"],
       reporter: ["text", "html", "lcov"],
     },
