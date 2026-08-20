@@ -5,6 +5,7 @@
  *   npm run test:branding      (local: DATABASE_URL → docker, not Neon)
  */
 import postgres from "postgres";
+import { expect, it } from "vitest";
 
 const ORG = "org_brand_test";
 const OTHER = "org_brand_other";
@@ -35,7 +36,9 @@ async function main() {
   try {
     /* ── validator (pure) ── */
     check("accepts a small PNG data URL", validateImageDataUrl(PNG, LOGO_MAX_BYTES).ok);
-    const big = "data:image/png;base64," + "A".repeat(200_000); // ~150 KB decoded
+    // Comfortably over LOGO_MAX_BYTES regardless of the configured limit
+    // (base64 decodes to ~3/4 its length, so 2× the byte budget is ~1.5× over).
+    const big = "data:image/png;base64," + "A".repeat(LOGO_MAX_BYTES * 2);
     check("rejects an oversized image", !validateImageDataUrl(big, LOGO_MAX_BYTES).ok);
     check("rejects a non-image", !validateImageDataUrl("data:text/plain;base64,SGk=", LOGO_MAX_BYTES).ok);
     check("rejects an SVG (XSS surface)",
@@ -83,10 +86,9 @@ async function main() {
     await sql`DELETE FROM organization WHERE id IN (${ORG}, ${OTHER})`;
     await sql.end();
   }
-  process.exit(failures === 0 ? 0 : 1);
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+it("branding", async () => {
+  await main();
+  expect(failures, "one or more checks failed").toBe(0);
+}, 30_000);

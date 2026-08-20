@@ -10,6 +10,7 @@
  * that double-booking stays impossible under concurrency.
  */
 import postgres from "postgres";
+import { expect, it } from "vitest";
 
 const ORG = "org_calendar_test";
 const OTHER = "org_calendar_other";
@@ -209,10 +210,9 @@ async function main() {
     await sql`DELETE FROM organization WHERE id IN (${ORG}, ${OTHER})`;
     await sql.end();
   }
-  process.exit(failures === 0 ? 0 : 1);
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+it("calendar (iCal)", async () => {
+  await main();
+  expect(failures, "one or more checks failed").toBe(0);
+}, 30_000);

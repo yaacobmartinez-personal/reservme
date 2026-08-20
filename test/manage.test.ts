@@ -7,6 +7,7 @@
  * and cancel freeing the slot.
  */
 import postgres from "postgres";
+import { expect, it } from "vitest";
 
 const ORG = "org_katipunan";
 let failures = 0;
@@ -84,7 +85,9 @@ async function main() {
     await sql`DELETE FROM customer WHERE email = ${email}`;
     await sql.end();
   }
-  process.exit(failures === 0 ? 0 : 1);
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+it("run-sheet management", async () => {
+  await main();
+  expect(failures, "one or more checks failed").toBe(0);
+}, 30_000);

@@ -123,10 +123,10 @@ Two things this cost, both worth knowing before touching `src/lib/booking/`:
 - **Shared sessions can't use an exclusion constraint** — those can't count.
   Capacity is enforced by an atomic conditional `UPDATE` plus a `CHECK` backstop.
 
-Verify it any time:
+Verify it any time (the concurrency test is part of the Vitest suite):
 
 ```bash
-npm run test:booking
+npm test
 ```
 
 24 parallel bookings for one slot, 18 people racing for 12 session spots. It
@@ -178,7 +178,8 @@ a forged impersonation cookie grants nothing.
 
 ```
 drizzle/0000_init.sql   the schema — SOURCE OF TRUTH (constraints live here)
-scripts/                migrate · seed · test:booking
+scripts/                migrate · seed · worker · HTTP test scripts
+test/                   Vitest suite (setup + 24 DB/lib scenarios)
 src/
   proxy.ts              hostname routing: apex vs app subdomain
   app/
@@ -279,7 +280,7 @@ test:coverage` against a throwaway Postgres on every push and PR.
 ## Checks
 
 ```bash
-npm run build && npx eslint src scripts && npm test
+npm run build && npx eslint src scripts test && npm test
 ```
 
 ## Deploying
@@ -295,5 +296,5 @@ Postgres and set the real hosts + secrets. `/api/healthz` answers on every host
 (returns 503 if the database is unreachable) for orchestrator health checks.
 
 ```bash
-npm run build && npx eslint src scripts && npm run test:booking
+npm run build && npx eslint src scripts test && npm test
 ```

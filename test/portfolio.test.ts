@@ -5,6 +5,7 @@
  *   npm run test:portfolio     (local: DATABASE_URL → docker, not Neon)
  */
 import postgres from "postgres";
+import { expect, it } from "vitest";
 
 const A = "org_pf_a";
 const B = "org_pf_b";
@@ -80,10 +81,9 @@ async function main() {
     await sql`DELETE FROM "user" WHERE id IN (${u1}, ${u2})`;
     await sql.end();
   }
-  process.exit(failures === 0 ? 0 : 1);
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+it("portfolio", async () => {
+  await main();
+  expect(failures, "one or more checks failed").toBe(0);
+}, 30_000);

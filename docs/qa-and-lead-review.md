@@ -81,7 +81,7 @@ tracked in §2.2, because it belongs with building session creation.
 
 ### 1.3 [P2] Concurrency test booked a possibly-closed slot
 
-**File:** `scripts/test-concurrency.ts`
+**File:** `test/booking-concurrency.test.ts`
 
 The load-bearing test picked `now() + 36h`, UTC-aligned. That "worked" only
 because nothing validated opening hours; with §1.1 in place it started failing

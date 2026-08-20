@@ -7,6 +7,7 @@
  *   npm run test:staff        (local: DATABASE_URL → docker, not Neon)
  */
 import postgres from "postgres";
+import { expect, it } from "vitest";
 
 const ORG = "org_staff_test";
 const OTHER = "org_staff_other";
@@ -87,10 +88,9 @@ async function main() {
     await sql`DELETE FROM "user" WHERE id IN (${ownerId}, ${staffId}, ${otherOwnerId})`;
     await sql.end();
   }
-  process.exit(failures === 0 ? 0 : 1);
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+it("staff", async () => {
+  await main();
+  expect(failures, "one or more checks failed").toBe(0);
+}, 30_000);

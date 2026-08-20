@@ -5,6 +5,7 @@
  *   npm run test:reminders     (local: DATABASE_URL → docker, not Neon)
  */
 import postgres from "postgres";
+import { expect, it } from "vitest";
 
 const SOON = "org_remind_soon";
 const DUE = "org_remind_due";
@@ -64,10 +65,9 @@ async function main() {
     await sql`DELETE FROM organization WHERE id IN (${SOON}, ${DUE})`;
     await sql.end();
   }
-  process.exit(failures === 0 ? 0 : 1);
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+it("billing reminders", async () => {
+  await main();
+  expect(failures, "one or more checks failed").toBe(0);
+}, 30_000);

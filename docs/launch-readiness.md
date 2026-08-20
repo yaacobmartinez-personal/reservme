@@ -94,7 +94,7 @@ The sequencing matters more than the total — see the plan at the end.
 These are load-bearing and I checked them against the code, not the README:
 
 - **Double-booking is impossible.** `reservation_no_overlap` (a `btree_gist`
-  `EXCLUDE` constraint) enforces it in the database; `scripts/test-concurrency.ts`
+  `EXCLUDE` constraint) enforces it in the database; `test/booking-concurrency.test.ts`
   fires 24 parallel bookings at one slot and passes 10/10 from cold. The advisory
   lock in `reserveSpace` removes the deadlock class rather than papering over it.
 - **Tenant isolation holds.** Every tenant query resolves `organization_id` in

@@ -42,7 +42,7 @@ it — not "should work," but "seen working."
 ### The booking engine — the load-bearing part
 - **Double-booking is structurally impossible.** A `btree_gist` `EXCLUDE`
   constraint enforces non-overlap at the database; a per-space advisory lock
-  serialises writes so the constraint never deadlocks. `npm run test:booking`
+  serialises writes so the constraint never deadlocks. `npm test`
   fires 24 concurrent bookings at one slot → exactly one wins, 10/10 from cold.
 - Availability derived in **venue-local time** (DST-correct), holds with expiry,
   shared-session capacity via atomic conditional update.
@@ -57,12 +57,12 @@ it — not "should work," but "seen working."
 - Venue management: spaces, weekly opening hours, closures, booking policy,
   settings. `npm run test:onboarding` + browser walkthrough.
 - Run sheet with **check-in / no-show / cancel** (no-show flags the customer).
-  `npm run test:manage` + browser.
+  `npm test` + browser.
 
 ### Public booking (`reservme.pro/<slug>`)
 - Anonymous booking, no account. Space/date pickers, live slots, instant confirm.
 - **Rate limited** (per-IP + per-venue) with a Turnstile hook.
-  `npm run test:ratelimit` (exact under concurrency).
+  `npm test` (exact under concurrency).
 
 ### Platform admin console (`admin.reservme.pro`)
 - Tenant list (with billing band + 30-day volume), tenant detail, suspend /
@@ -101,7 +101,7 @@ Built and verified. The dashboard is now KPI tiles with sparklines + deltas
 trend charts, a booking-mix donut, revenue-by-space bars, a peak-hours heatmap,
 a customers panel, a "needs you" list, a period selector (today/7d/30d/90d), and
 the run sheet with its actions. `src/lib/analytics.ts` does the aggregation in
-venue-local time; charts are Recharts, token-coloured. `npm run test:analytics`
+venue-local time; charts are Recharts, token-coloured. `npm test`
 (13 checks) + a 237-booking browser walkthrough. Remaining polish if wanted:
 closures in the utilisation denominator, a custom date range, dark mode.
 
@@ -207,13 +207,18 @@ the dashboard redesign.
 ## Test suites (all green)
 
 ```bash
-npm run test:booking      # concurrency: a slot can't be sold twice
-npm run test:manage       # check-in / no-show / cancel
-npm run test:ratelimit    # booking endpoint can't be flooded
-npm run test:onboarding   # empty venue → bookable through the owner surface
-npm run test:admin        # platform console refuses everyone it should
+npm test                  # the whole Vitest suite (24 DB/lib scenarios)
+npm run test:coverage     # same, with a v8 coverage summary
+npm run test:onboarding   # empty venue → bookable through the owner surface  (needs the app running)
+npm run test:admin        # platform console refuses everyone it should       (needs the app running)
 npm run test:jobs         # booking → queue → worker → email  (needs `npm run worker`)
 ```
+The Vitest suite covers booking concurrency, run-sheet management, rate limiting,
+analytics, CRM, calendar, auth, billing, branding, self-service, staff, waitlist,
+export, reminders, pricing, sessions, portfolio, promo, engagement, memberships,
+integrations, suspension, admin ops, and storage. `test:onboarding`/`test:admin`/
+`test:jobs` are HTTP suites still run as standalone scripts.
+
 Plus lint, typecheck, and `npm run build`. CI runs all of it on push/PR.
 
 ---

@@ -7,6 +7,7 @@
  * short real-window recovery check.
  */
 import postgres from "postgres";
+import { expect, it } from "vitest";
 
 let failures = 0;
 const check = (label: string, ok: boolean, detail = "") => {
@@ -64,7 +65,9 @@ async function main() {
     await sql`DELETE FROM rate_limit WHERE bucket LIKE 'test%'`;
     await sql.end();
   }
-  process.exit(failures === 0 ? 0 : 1);
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+it("rate limiting", async () => {
+  await main();
+  expect(failures, "one or more checks failed").toBe(0);
+}, 30_000);

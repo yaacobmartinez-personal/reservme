@@ -10,6 +10,7 @@
  * days; reject records a note; multi-site is a quote; tenant isolation holds.
  */
 import postgres from "postgres";
+import { expect, it } from "vitest";
 
 const ORG = "org_billing_test";
 const OTHER = "org_billing_other";
@@ -143,10 +144,9 @@ async function main() {
     await sql`DELETE FROM organization WHERE id IN (${ORG}, ${OTHER})`;
     await sql.end();
   }
-  process.exit(failures === 0 ? 0 : 1);
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+it("billing", async () => {
+  await main();
+  expect(failures, "one or more checks failed").toBe(0);
+}, 30_000);

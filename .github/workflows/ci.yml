@@ -44,7 +44,7 @@ jobs:
       - run: npm ci
 
       - name: Lint
-        run: npx eslint src scripts
+        run: npx eslint src scripts test
 
       - name: Typecheck
         run: npx tsc --noEmit
@@ -57,45 +57,22 @@ jobs:
           npx tsx scripts/migrate.ts
           npx tsx scripts/seed.ts
 
-      # The Vitest suite (booking concurrency, promo, engagement, memberships,
-      # integrations, suspension, admin ops, storage) with coverage. It migrates
-      # + seeds itself, so it also stands alone from a fresh clone.
+      # The full Vitest suite (24 DB/lib-level scenarios — booking concurrency,
+      # management, rate limiting, analytics, CRM, calendar, auth, billing,
+      # branding, self-service, staff, waitlist, export, reminders, pricing,
+      # sessions, portfolio, promo, engagement, memberships, integrations,
+      # suspension, admin ops, storage) with coverage. It migrates + seeds
+      # itself, so it also stands alone from a fresh clone.
       - name: Vitest (+ coverage)
         run: npm run test:coverage
 
-      # Engine-level suites still on standalone scripts; DB only.
-      - name: Booking management
-        run: npx tsx scripts/test-manage.ts
-      - name: Rate limiting
-        run: npx tsx scripts/test-ratelimit.ts
-      - name: Analytics
-        run: npx tsx scripts/test-analytics.ts
-      - name: CRM
-        run: npx tsx scripts/test-crm.ts
-      - name: Calendar
-        run: npx tsx scripts/test-calendar.ts
-      - name: Auth hardening
-        run: npx tsx scripts/test-auth.ts
-      - name: Billing
-        run: npx tsx scripts/test-billing.ts
-      - name: Branding
-        run: npx tsx scripts/test-branding.ts
-      - name: Customer self-service
-        run: npx tsx scripts/test-self-service.ts
-      - name: Staff
-        run: npx tsx scripts/test-staff.ts
-      - name: Waitlist
-        run: npx tsx scripts/test-waitlist.ts
-      - name: Export
-        run: npx tsx scripts/test-export.ts
-      - name: Billing reminders
-        run: npx tsx scripts/test-reminders.ts
-      - name: Pricing
-        run: npx tsx scripts/test-pricing.ts
-      - name: Sessions
-        run: npx tsx scripts/test-sessions.ts
-      - name: Portfolio
-        run: npx tsx scripts/test-portfolio.ts
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+          if-no-files-found: ignore
 
       # HTTP suites need the app running; start web + worker in the background.
       - name: Start app

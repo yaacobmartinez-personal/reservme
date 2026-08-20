@@ -129,7 +129,7 @@ spans all columns. Scoped to the org; positioned client-side from start/end.
 blocks for a known day; manual booking creates confirmed + customer; walk-in-now is
 allowed; an overlapping manual booking is refused; `moveReservation` validates and
 refuses overlap; block-off; cross-org isolation. **Extend
-`scripts/test-concurrency.ts`** to hammer the staff booking path (double-booking
+`test/booking-concurrency.test.ts`** to hammer the staff booking path (double-booking
 must be impossible there too). Plus a browser walkthrough on the seeded demo venue.
 
 ## Files

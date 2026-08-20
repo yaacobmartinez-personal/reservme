@@ -14,6 +14,7 @@
 process.env.AUTH_TEST_CAPTURE = "1";
 
 import postgres from "postgres";
+import { expect, it } from "vitest";
 
 const EMAIL = `auth-test-${Date.now()}@example.com`;
 const OLD_PW = "old-password-123";
@@ -118,10 +119,9 @@ async function main() {
     await cleanup();
     await sql.end();
   }
-  process.exit(failures === 0 ? 0 : 1);
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+it("auth hardening", async () => {
+  await main();
+  expect(failures, "one or more checks failed").toBe(0);
+}, 30_000);

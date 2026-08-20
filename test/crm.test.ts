@@ -8,6 +8,7 @@
  * Runs against whatever DATABASE_URL is set (use local docker, not prod).
  */
 import postgres from "postgres";
+import { expect, it } from "vitest";
 
 const ORG = "org_crm_test";
 const OTHER = "org_crm_other";
@@ -179,10 +180,9 @@ async function main() {
     await sql`DELETE FROM organization WHERE id IN (${ORG}, ${OTHER})`;
     await sql.end();
   }
-  process.exit(failures === 0 ? 0 : 1);
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+it("crm", async () => {
+  await main();
+  expect(failures, "one or more checks failed").toBe(0);
+}, 30_000);
