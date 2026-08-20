@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { z } from "zod";
 import { sql } from "@/db";
 import { requirePlatformAdmin } from "@/lib/admin/access";
@@ -127,11 +126,11 @@ export async function impersonate(formData: FormData) {
     detail: reason ? { reason } : undefined,
   });
 
-  // The impersonated view is rendered inside the admin console rather than on
-  // the app host. That keeps the impersonation cookie host-only — widening it
-  // to .reservme.pro would send it to the public booking pages too — and means
-  // the admin is never on the real tenant surface wondering who they are.
-  redirect("/viewing");
+  // No server-side redirect: a Server Action redirect to the bare "/viewing"
+  // soft-navigates, and the client router matches it against the apex
+  // [venueSlug] route ("Venue not found") instead of the host-rewritten
+  // /admin/viewing. The client form navigates with router.push instead, which
+  // resolves correctly (the same path a nav-link click takes).
 }
 
 export async function stopImpersonating() {
