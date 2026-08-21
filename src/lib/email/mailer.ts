@@ -1,11 +1,14 @@
 /**
- * Minimal transactional mailer.
+ * Minimal transactional mailer with two interchangeable transports.
  *
- * Uses Resend's HTTP API directly — no SDK, so nothing to keep in step and it
- * runs anywhere fetch does. When RESEND_API_KEY is unset (local dev, CI, a
- * fresh clone) it logs the message instead of sending, so the whole app works
- * without email configured. Email is never on the critical path of a booking.
+ * Priority: SMTP (if SMTP_HOST is set) → Resend (if RESEND_API_KEY is set) →
+ * log-only. SMTP goes through nodemailer (see ./smtp); Resend uses its HTTP API
+ * directly — no SDK, so nothing to keep in step and it runs anywhere fetch does.
+ * When neither is configured (local dev, CI, a fresh clone) the message is
+ * logged instead of sent, so the whole app works unconfigured. Email is never on
+ * the critical path of a booking.
  */
+import { sendViaSmtp, smtpConfigured } from "./smtp";
 
 export type Email = {
   to: string;
@@ -22,13 +25,18 @@ export type SendResult =
 const FROM = process.env.EMAIL_FROM ?? "ReservMe <bookings@reservme.pro>";
 
 export async function sendEmail(email: Email): Promise<SendResult> {
+  // Prefer SMTP when configured — your own server / SES / Mailgun / etc.
+  if (smtpConfigured()) {
+    return sendViaSmtp(email, FROM);
+  }
+
   const key = process.env.RESEND_API_KEY;
 
   if (!key) {
     // Not an error — just unconfigured. Make it visible in dev without failing.
     console.info(
       `[email:dev] would send to ${email.to} — "${email.subject}" ` +
-        `(set RESEND_API_KEY to actually send)`,
+        `(set SMTP_HOST or RESEND_API_KEY to actually send)`,
     );
     return { ok: true, id: null, delivered: false };
   }

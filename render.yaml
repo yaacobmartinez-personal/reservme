@@ -72,3 +72,30 @@ envVarGroups:
         sync: false
       - key: SENTRY_DSN
         sync: false
+      # Optional: image storage on Cloudflare R2. Set ALL FIVE to store logos,
+      # cover photos, court images and QR codes in R2; leave blank to fall back
+      # to size-capped data URLs in Postgres. R2_PUBLIC_URL is the bucket's
+      # public domain (its r2.dev URL or a custom domain), not the S3 endpoint.
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: R2_PUBLIC_URL
+        sync: false
+      # Optional: send email over SMTP instead of Resend. Set SMTP_HOST to
+      # enable (it takes priority over RESEND_API_KEY). From address is
+      # EMAIL_FROM above.
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_SECURE
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
