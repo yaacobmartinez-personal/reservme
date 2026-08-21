@@ -98,3 +98,30 @@ jobs:
         if: always()
         run: |
           kill "$WEB_PID" "$WORKER_PID" 2>/dev/null || true
+
+  # The standalone static marketing site is its own npm package with its own
+  # lockfile. Build it too so its prebuild content-sync and static export are
+  # verified on every push — it deploys independently and isn't covered above.
+  marketing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: marketing/package-lock.json
+
+      - name: Install
+        working-directory: marketing
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: marketing
+        run: npx tsc --noEmit
+
+      # `npm run build` runs prebuild (sync-shared-content) then the static export.
+      - name: Build (static export)
+        working-directory: marketing
+        run: npm run build

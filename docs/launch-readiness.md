@@ -6,6 +6,51 @@
 
 ---
 
+## Update — status reconciliation (2026-08-21)
+
+Most of the gap list further down predates the build-out and is now **stale**.
+Reconciled against the current code:
+
+**Done since this review — no longer blockers:**
+- P0-1 onboarding / space management · P0-2 session self-cancel · P0-3 email
+  (Resend **and** SMTP) · P0-4 pg-boss worker — built + tested.
+- P1-1 rate-limit + Turnstile · P1-2 staff invites + branding · P1-3 owner
+  booking management · P1-5 email verification + password reset — built.
+- Subscription billing for the soft-launch model (GCash-proof approval,
+  auto-suspend after a grace period, billing reminders) — built.
+- **Testing gap closed:** a Vitest suite (~100 tests) with enforced coverage
+  thresholds, wired into CI and runnable from a fresh clone; a separate CI job
+  builds the standalone marketing site.
+- Real commit history, structured JSON logging + Sentry-gated capture,
+  `/api/healthz`, and pg_dump backup/restore — all in place.
+
+**Still blocking a public soft launch:**
+1. **Legal review** — Privacy / Terms / DPA are honest drafts; a lawyer must
+   review before you rely on them. (Yours; no one else can clear it.)
+2. **Push the branch + run CI** — everything is on `feat/reservme-soft-launch`,
+   **unpushed**; CI has never run for real. Do this first.
+3. **Deploy** — nothing is deployed yet. Provision managed Postgres, create the
+   Render Blueprint, set the secrets, add the three domains + DNS. Step-by-step:
+   [`render-deploy.md`](render-deploy.md). Deploy-time wiring to not forget: a
+   real `BETTER_AUTH_SECRET`; build-time `NEXT_PUBLIC_*` hosts if your domains
+   differ from `reservme.pro`; an email transport (Resend or SMTP); `SENTRY_DSN`;
+   a scheduled `db:backup`; first-admin bootstrap; and a cookie-flag smoke test
+   under the real subdomains.
+
+**Deferred by the soft-launch decision — blocks only a *paid* launch:**
+- P0-5 online customer payments and P1-4 online-gateway billing (PayMongo). Soft
+  launch runs pay-at-venue; venue subscriptions are billed manually via GCash
+  proof.
+
+**Worth closing (not hard blockers):** the marketing app now builds in CI; a
+browser-level smoke test of the *deployed* app is still absent (the HTTP suites
+cover onboarding / admin / jobs, not a real prod click-through).
+
+Net: **the code side is soft-launch-ready — the remaining blockers are the legal
+review and the deploy itself, both largely non-code.**
+
+---
+
 ## Update — P0 work landed (2026-08-13)
 
 Four of the five P0s are **done and verified**; the fifth is a product decision,
