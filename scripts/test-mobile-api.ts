@@ -820,10 +820,30 @@ async function main() {
         token: ownerToken,
       });
       const earlyRow = (early.body.booking ?? {}) as Record<string, unknown>;
+      // Two bounds, and which one binds depends on the hour the walk runs:
+      // for a slot already under way the clamp is its start, and for one still
+      // ahead it is *now*, because somebody arriving early has arrived now —
+      // recording the slot start would claim an arrival that has not happened.
+      // The first version of this asserted only the first case and passed
+      // until the clock rolled past midnight.
+      const clampedAt = String(earlyRow.checkedInAt);
+      const floor =
+        String(earlyRow.startsAt) < new Date().toISOString()
+          ? String(earlyRow.startsAt)
+          : null;
       check(
         "a check-in time before the slot is clamped into it",
-        early.status === 200 && String(earlyRow.checkedInAt) >= String(earlyRow.startsAt),
+        early.status === 200 && (floor === null || clampedAt >= floor),
         { clamped: earlyRow.checkedInAt, startsAt: earlyRow.startsAt },
+      );
+      // A minute of slack: the clamp is the *database's* now(), and this
+      // process's clock is not the same clock. Without it this asserts that
+      // two machines agree to the millisecond, which they do not.
+      const soon = new Date(Date.now() + 60_000).toISOString();
+      check(
+        "and never lands in the future",
+        early.status === 200 && clampedAt <= soon,
+        { clamped: earlyRow.checkedInAt, ceiling: soon },
       );
 
       await call("POST", `/venues/${slug}/bookings/${bookingId}/undo-checkin`, { token: ownerToken });
@@ -1259,6 +1279,186 @@ async function main() {
     }
   }
 
+
+  /* #31 team, #32 billing, #33 insights — the three owner screens */
+  console.log(NL + "GET /team + /billing + /insights  (#31-#33)");
+
+  const team = await call("GET", `/venues/${slug}/team`, { token: ownerToken });
+  check("the team reads", team.status === 200, team.body);
+  const members = (team.body.members ?? []) as Record<string, unknown>[];
+  check("with the owner on it", members.some((m) => m.role === "owner"), members);
+  // So the screen says "you" rather than making somebody recognise their own
+  // address in a list.
+  check("marked as you", members.some((m) => m.isSelf === true), members);
+  check("and your own role, so the screen can explain rather than hide",
+    team.body.yourRole === "owner", team.body.yourRole);
+
+  const badInvite = await call("POST", `/venues/${slug}/team/invitations`, {
+    body: { email: "not-an-email", role: "member" },
+    token: ownerToken,
+  });
+  check(
+    "an invitation nobody could accept is refused",
+    badInvite.status === 400 &&
+      (badInvite.body.fieldErrors as Record<string, string>)?.email ===
+        "That email doesn't look right.",
+    badInvite.body,
+  );
+
+  const invite = await call("POST", `/venues/${slug}/team/invitations`, {
+    body: { email: `staff-${stamp}@reservme.test`, role: "member" },
+    token: ownerToken,
+  });
+  check("an invitation goes out", invite.status === 201, invite.body);
+  const invitations = (invite.body.invitations ?? []) as Record<string, unknown>[];
+  check("and shows as pending", invitations.length === 1, invitations);
+  check(
+    "with an expiry the screen can count down",
+    typeof invitations[0]?.expiresAt === "string",
+    invitations[0],
+  );
+
+  const unInvite = await call(
+    "DELETE",
+    `/venues/${slug}/team/invitations/${invitations[0]?.id}`,
+    { token: ownerToken },
+  );
+  check("an invitation can be taken back", unInvite.status === 200, unInvite.body);
+  check(
+    "leaving none pending",
+    ((unInvite.body.invitations ?? []) as unknown[]).length === 0,
+    unInvite.body.invitations,
+  );
+  const unInviteTwice = await call(
+    "DELETE",
+    `/venues/${slug}/team/invitations/${invitations[0]?.id}`,
+    { token: ownerToken },
+  );
+  check("and twice is a 404", unInviteTwice.status === 404, unInviteTwice.status);
+
+  // The guard Better Auth has no opinion about, and the one that is not
+  // recoverable from inside the app.
+  const ownSelf = members.find((m) => m.isSelf === true);
+  const demoteSelf = await call("PATCH", `/venues/${slug}/team/members/${ownSelf?.id}`, {
+    body: { role: "member" },
+    token: ownerToken,
+  });
+  check(
+    "the last owner cannot demote themselves",
+    demoteSelf.status === 409 && demoteSelf.body.reason === "last_owner",
+    demoteSelf.body,
+  );
+  check(
+    "and the refusal says what to do about it",
+    String(demoteSelf.body.message).includes("owner first"),
+    demoteSelf.body.message,
+  );
+  const removeSelf = await call("DELETE", `/venues/${slug}/team/members/${ownSelf?.id}`, {
+    token: ownerToken,
+  });
+  check(
+    "nor remove themselves",
+    removeSelf.status === 409 && removeSelf.body.reason === "last_owner",
+    removeSelf.body,
+  );
+  const stillOwner = await call("GET", `/venues/${slug}/team`, { token: ownerToken });
+  check(
+    "and the venue still has its owner",
+    ((stillOwner.body.members ?? []) as Record<string, unknown>[]).some(
+      (m) => m.role === "owner",
+    ),
+    stillOwner.body.members,
+  );
+
+  const billing = await call("GET", `/venues/${slug}/billing`, { token: ownerToken });
+  check("billing reads", billing.status === 200, billing.body);
+  const bill = (billing.body.billing ?? {}) as Record<string, unknown>;
+  const band = (bill.band ?? {}) as Record<string, unknown>;
+  // One active space at this point in the walk, so: Solo.
+  check("with the band derived from active spaces", band.id === "solo", bill);
+  check("its price named", band.pricePesos === 499, band);
+  check("and the venue still trialing", bill.status === "trialing", bill.status);
+  check(
+    "with the days left on it",
+    typeof bill.daysLeftInTrial === "number",
+    bill.daysLeftInTrial,
+  );
+
+  const proof = await fetch(`${BASE}/api/mobile/venues/${slug}/billing/proof`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${ownerToken}`,
+      "x-client": "reservme-flutter/0.1.0 (test)",
+    },
+    body: (() => {
+      const form = new FormData();
+      form.set("reference", "INSTA-WALK-1");
+      form.set("paidAt", "2026-09-20");
+      return form;
+    })(),
+  });
+  const proofBody = (await proof.json()) as Record<string, unknown>;
+  check("a transfer can be submitted", proof.status === 201, proofBody);
+  const pending = ((proofBody.billing ?? {}) as Record<string, unknown>)
+    .pendingPayment as Record<string, unknown> | null;
+  // Never in the request: the form cannot declare what it owes.
+  check("and is priced from the band, not the form", pending?.amountCents === 49900, pending);
+  check("with the date as a day, not an instant", pending?.paidAt === "2026-09-20", pending);
+
+  const secondProof = await fetch(`${BASE}/api/mobile/venues/${slug}/billing/proof`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${ownerToken}`,
+      "x-client": "reservme-flutter/0.1.0 (test)",
+    },
+    body: (() => {
+      const form = new FormData();
+      form.set("reference", "INSTA-WALK-2");
+      form.set("paidAt", "2026-09-21");
+      return form;
+    })(),
+  });
+  const secondBody = (await secondProof.json()) as Record<string, unknown>;
+  check(
+    "a second while one is under review is refused",
+    secondProof.status === 409 && secondBody.reason === "already_pending",
+    secondBody,
+  );
+
+  const insights = await call("GET", `/venues/${slug}/insights?period=7d`, {
+    token: ownerToken,
+  });
+  check("insights read", insights.status === 200, insights.body);
+  const ins = (insights.body.insights ?? {}) as Record<string, unknown>;
+  check("for the period asked for", ins.range === "7d", ins.range);
+  check(
+    "with a row per day carrying both value and utilisation",
+    ((ins.bookedByDay ?? []) as Record<string, unknown>[]).length === 7 &&
+      ((ins.bookedByDay ?? []) as Record<string, unknown>[]).every(
+        (d) => typeof d.cents === "number" && typeof d.utilisationPct === "number",
+      ),
+    ins.bookedByDay,
+  );
+  check(
+    "a full week of full days in the heatmap",
+    ((ins.peakHours ?? []) as unknown[][]).length === 7 &&
+      ((ins.peakHours ?? []) as unknown[][]).every((row) => row.length === 24),
+    (ins.peakHours as unknown[][])?.length,
+  );
+  check(
+    "and no awaiting-payments tile, because v1 is pay-at-venue",
+    Object.keys((ins.needsYou ?? {}) as object).sort().join() === "halfEmptySessions,toCheckIn",
+    ins.needsYou,
+  );
+  const nonsense = await call("GET", `/venues/${slug}/insights?period=forever`, {
+    token: ownerToken,
+  });
+  check(
+    "a period this server does not know falls back rather than failing",
+    nonsense.status === 200 &&
+      ((nonsense.body.insights ?? {}) as Record<string, unknown>).range === "30d",
+    nonsense.status,
+  );
 
   if (process.env.DATABASE_URL) {
     const db = postgres(process.env.DATABASE_URL, { max: 1, onnotice: () => {} });
