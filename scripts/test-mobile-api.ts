@@ -895,21 +895,215 @@ async function main() {
       /* #20 customer search */
       const hits = await call("GET", `/venues/${slug}/customers?q=Ramon`, { token: ownerToken });
       check("the typeahead finds a customer", hits.status === 200, hits.body);
-      const found = (hits.body.customers ?? []) as Record<string, unknown>[];
+      const found = (hits.body.rows ?? []) as Record<string, unknown>[];
       check("by name", found.some((c) => c.name === "Ramon Cruz"), found);
       check(
         "with the fields the sheet shows",
         found[0]?.email !== undefined && found[0]?.bookings !== undefined,
         found[0],
       );
+      // One page shape for both readers: the typeahead and the Customers
+      // screen call the same endpoint, and they used to disagree about the key.
+      check("and a total the header can count", typeof hits.body.total === "number", hits.body.total);
 
       const noHits = await call("GET", `/venues/${slug}/customers?q=zzzznobody`, { token: ownerToken });
       check(
         "and an empty search is an empty list, not an error",
-        noHits.status === 200 && (noHits.body.customers as unknown[]).length === 0,
+        noHits.status === 200 && (noHits.body.rows as unknown[]).length === 0,
         noHits.body,
       );
 
+      const segmented = await call("GET", `/venues/${slug}/customers?segment=noShows`, {
+        token: ownerToken,
+      });
+      check("a segment chip filters rather than being ignored", segmented.status === 200, segmented.body);
+      check(
+        "and nobody in it is clean",
+        ((segmented.body.rows ?? []) as Record<string, unknown>[]).every(
+          (c) => Number(c.noShowCount) > 0,
+        ),
+        segmented.body.rows,
+      );
+      const nonsense = await call("GET", `/venues/${slug}/customers?segment=whales`, {
+        token: ownerToken,
+      });
+      check(
+        "and a segment this server does not know shows everybody",
+        nonsense.status === 200 &&
+          ((nonsense.body.rows ?? []) as unknown[]).length >=
+            ((segmented.body.rows ?? []) as unknown[]).length,
+        nonsense.status,
+      );
+
+      /* #21 one customer's page, #22 the CRM writes */
+      const ramonId = String(found.find((c) => c.name === "Ramon Cruz")?.id ?? "");
+      const page = await call("GET", `/venues/${slug}/customers/${ramonId}`, { token: ownerToken });
+      check("a customer opens with their history", page.status === 200, page.body);
+      const history = [
+        ...((page.body.upcoming ?? []) as Record<string, unknown>[]),
+        ...((page.body.past ?? []) as Record<string, unknown>[]),
+      ];
+      check("with at least one booking on it", history.length > 0, history.length);
+      check(
+        "each carrying the reference the customer quotes",
+        history.every((b) => typeof b.reference === "string" && String(b.reference).length > 0),
+        history[0],
+      );
+      check(
+        "and a label in the venue's own wall clock",
+        /^\w{3} \d{2} \w{3} \u00b7 \d{2}:\d{2}$/.test(String(history[0]?.whenLabel)),
+        history[0]?.whenLabel,
+      );
+
+      const strangerId = "00000000-0000-4000-8000-000000000000";
+      const stranger = await call("GET", `/venues/${slug}/customers/${strangerId}`, { token: ownerToken });
+      check("a customer who is not this venue's is a 404", stranger.status === 404, stranger.status);
+      const notAUuid = await call("GET", `/venues/${slug}/customers/banana`, { token: ownerToken });
+      check("and so is a malformed id, rather than a 500", notAUuid.status === 404, notAUuid.status);
+
+      const note = await call("POST", `/venues/${slug}/customers/${ramonId}/notes`, {
+        body: { body: "  Prefers the far court  " },
+        token: ownerToken,
+      });
+      check("a note can be written", note.status === 201, note.body);
+      const noteRow = (note.body.note ?? {}) as Record<string, unknown>;
+      check("trimmed", noteRow.body === "Prefers the far court", noteRow.body);
+      check("and signed by whoever wrote it", noteRow.authorName !== undefined, noteRow);
+
+      const emptyNote = await call("POST", `/venues/${slug}/customers/${ramonId}/notes`, {
+        body: { body: "   " },
+        token: ownerToken,
+      });
+      check(
+        "an empty note is refused in the desk's own words",
+        emptyNote.status === 400 && (emptyNote.body.fieldErrors as Record<string, string>)?.body === "Write something first.",
+        emptyNote.body,
+      );
+
+      const withNote = await call("GET", `/venues/${slug}/customers/${ramonId}`, { token: ownerToken });
+      check(
+        "and it shows on the customer's page",
+        ((withNote.body.notes ?? []) as unknown[]).length === 1,
+        withNote.body.notes,
+      );
+
+      const unnote = await call(
+        "DELETE",
+        `/venues/${slug}/customers/${ramonId}/notes/${noteRow.id}`,
+        { token: ownerToken },
+      );
+      check("a note can be taken back", unnote.status === 200, unnote.body);
+      const unnoteTwice = await call(
+        "DELETE",
+        `/venues/${slug}/customers/${ramonId}/notes/${noteRow.id}`,
+        { token: ownerToken },
+      );
+      check("and deleting it twice is not a second success", unnoteTwice.status === 404, unnoteTwice.status);
+
+      const tags = await call("PUT", `/venues/${slug}/customers/${ramonId}/tags`, {
+        body: { tags: ["Regular", "Pay & Play"] },
+        token: ownerToken,
+      });
+      check("tags are set as a list", tags.status === 200, tags.body);
+      check(
+        "and come back on the customer",
+        JSON.stringify((tags.body.customer as Record<string, unknown>)?.tags) ===
+          JSON.stringify(["Regular", "Pay & Play"]),
+        tags.body.customer,
+      );
+
+      const again = await call("PUT", `/venues/${slug}/customers/${ramonId}/tags`, {
+        body: { tags: ["Regular", "Pay & Play"] },
+        token: ownerToken,
+      });
+      check(
+        "sending the same list twice changes nothing",
+        JSON.stringify((again.body.customer as Record<string, unknown>)?.tags) ===
+          JSON.stringify(["Regular", "Pay & Play"]),
+        again.body.customer,
+      );
+
+      const badTag = await call("PUT", `/venues/${slug}/customers/${ramonId}/tags`, {
+        body: { tags: ["semi;colon"] },
+        token: ownerToken,
+      });
+      check(
+        "a tag with punctuation the server rejects says which characters are allowed",
+        badTag.status === 400 &&
+          (badTag.body.fieldErrors as Record<string, string>)?.tags === "Tags can use letters, numbers, spaces and - . &",
+        badTag.body,
+      );
+
+      const renamed = await call("PATCH", `/venues/${slug}/customers/${ramonId}`, {
+        body: { name: "Ramon S. Cruz", phone: " +63 917 555 0000 " },
+        token: ownerToken,
+      });
+      check("the contact can be corrected", renamed.status === 200, renamed.body);
+      const fixed = (renamed.body.customer ?? {}) as Record<string, unknown>;
+      check("name trimmed", fixed.name === "Ramon S. Cruz", fixed.name);
+      check("phone trimmed", fixed.phone === "+63 917 555 0000", fixed.phone);
+      // The (organization_id, email) identity key the booking engine matches
+      // returning customers on — editable here would split one person in two.
+      check("and the email untouched", String(fixed.email).includes("@"), fixed.email);
+
+      const unnamed = await call("PATCH", `/venues/${slug}/customers/${ramonId}`, {
+        body: { name: "  " },
+        token: ownerToken,
+      });
+      check(
+        "a nameless customer is refused",
+        unnamed.status === 400 && (unnamed.body.fieldErrors as Record<string, string>)?.name === "Name can't be empty.",
+        unnamed.body,
+      );
+
+      /* #23 the waitlist */
+      const [waiter] = await db<{ id: string }[]>`
+        SELECT id FROM customer WHERE organization_id = ${orgId} LIMIT 1
+      `;
+      const soonest = new Date(Date.now() + 2 * 3600_000);
+      const later = new Date(Date.now() + 48 * 3600_000);
+      await db`
+        INSERT INTO waitlist (organization_id, space_id, starts_at, ends_at, customer_id, status)
+        VALUES (${orgId}, ${court.id}::uuid, ${later}, ${new Date(later.getTime() + 3600_000)},
+                ${waiter.id}::uuid, 'notified'),
+               (${orgId}, ${court.id}::uuid, ${soonest}, ${new Date(soonest.getTime() + 3600_000)},
+                ${waiter.id}::uuid, 'waiting')
+      `;
+
+      const queue = await call("GET", `/venues/${slug}/waitlist`, { token: ownerToken });
+      check("the waitlist reads", queue.status === 200, queue.body);
+      const entries = (queue.body.entries ?? []) as Record<string, unknown>[];
+      check("with both entries", entries.length === 2, entries.length);
+      check(
+        "soonest slot first",
+        new Date(String(entries[0]?.startsAt)) < new Date(String(entries[1]?.startsAt)),
+        entries.map((e) => e.startsAt),
+      );
+      check(
+        "and no claim countdown, because the server has no claim window",
+        entries.every((e) => e.claimExpiresAt === null),
+        entries.map((e) => e.claimExpiresAt),
+      );
+      check(
+        "a notified entry says so",
+        entries.some((e) => e.status === "notified"),
+        entries.map((e) => e.status),
+      );
+
+      await db`
+        UPDATE waitlist SET starts_at = now() - interval '2 hours',
+                            ends_at = now() - interval '1 hour'
+        WHERE organization_id = ${orgId}
+      `;
+      const pastQueue = await call("GET", `/venues/${slug}/waitlist`, { token: ownerToken });
+      check(
+        "and a queue for a slot that has passed is history, not work",
+        ((pastQueue.body.entries ?? []) as unknown[]).length === 0,
+        pastQueue.body.entries,
+      );
+
+      await db`DELETE FROM waitlist WHERE organization_id = ${orgId}`;
+      await db`DELETE FROM customer_note WHERE organization_id = ${orgId}`;
       await db`DELETE FROM closure WHERE organization_id = ${orgId}`;
       await db`DELETE FROM reservation WHERE organization_id = ${orgId}`;
       await db`DELETE FROM customer WHERE organization_id = ${orgId}`;

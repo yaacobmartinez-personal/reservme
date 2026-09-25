@@ -1,4 +1,5 @@
 import { listCustomers } from "@/lib/customers";
+import { customerSummary, segmentOf } from "@/lib/mobile/customer-json";
 import { fail, ok } from "@/lib/mobile/respond";
 import { isFailure, venueScope } from "@/lib/mobile/venue-scope";
 
@@ -20,27 +21,16 @@ export async function GET(request: Request, { params }: Params) {
   const url = new URL(request.url);
   const q = (url.searchParams.get("q") ?? "").trim().slice(0, 200);
 
-  const { rows } = await listCustomers(scope.organizationId, scope.timezone, {
+  const { rows, total } = await listCustomers(scope.organizationId, scope.timezone, {
     search: q || undefined,
+    // The chips on V10. An unknown value is no filter rather than an error:
+    // a newer app asking for a segment this server does not have should show
+    // everybody, not a red screen.
+    segment: segmentOf(url.searchParams.get("segment")),
     sort: "name",
   });
 
-  // The app's CustomerSummary mirrors CustomerListRow field for field, so this
-  // is a rename of createdAt to an instant and nothing else. `lastVisitDays` is
-  // a count of days, not a date — the screen says "3 weeks ago", and computing
-  // that from a date on the phone would drift against the venue's own today.
-  return ok({
-    customers: rows.map((r) => ({
-      id: r.id,
-      name: r.name,
-      email: r.email,
-      phone: r.phone,
-      tags: r.tags,
-      bookings: r.bookings,
-      lifetimeValueCents: r.lifetimeValueCents,
-      noShowCount: r.noShowCount,
-      lastVisitDays: r.lastVisitDays,
-      createdAt: r.createdAt.toISOString(),
-    })),
-  });
+  // `rows` is the page (25); `total` is how many match, which is what the
+  // header counts — the two differ as soon as a venue has more than one page.
+  return ok({ rows: rows.map(customerSummary), total });
 }
