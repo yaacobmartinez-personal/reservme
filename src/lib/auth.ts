@@ -1,10 +1,11 @@
 import { betterAuth } from "better-auth";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { organization } from "better-auth/plugins";
+import { bearer, emailOTP, organization } from "better-auth/plugins";
 import { db, schema } from "@/db";
 import { serverEnv } from "@/lib/env";
 import { adminUrl, APP_HOST, appUrl } from "@/lib/env";
-import { deliverAuthEmail } from "@/lib/email/auth-emails";
+import { deliverAuthCode, deliverAuthEmail } from "@/lib/email/auth-emails";
 import { log } from "@/lib/log";
 
 /**
@@ -109,7 +110,73 @@ export const auth = betterAuth({
     },
   },
 
+  hooks: {
+    /**
+     * The email-OTP plugin ships a passwordless sign-in at
+     * /sign-in/email-otp. We want its verification and reset codes, not a
+     * second way into an owner account that nothing in the product offers,
+     * nobody expects, and no screen explains. Plugins add every endpoint they
+     * own, so the unwanted one is closed here.
+     */
+    before: createAuthMiddleware(async (ctx) => {
+      if (ctx.path === "/sign-in/email-otp" || ctx.path === "/forget-password/email-otp") {
+        throw new APIError("NOT_FOUND", { message: "Not found" });
+      }
+    }),
+  },
+
   plugins: [
+    /**
+     * The mobile app holds a bearer token, not a cookie: it talks to
+     * app.reservme.pro from a process that has no cookie jar shared with a
+     * browser, and a Set-Cookie on a native HTTP client is nobody's friend.
+     *
+     * The plugin does two things. On the way in it converts
+     * `Authorization: Bearer <token>` into the session cookie the rest of
+     * Better Auth already understands, so every existing endpoint and
+     * `getSession` work unchanged. On the way out it returns the session token
+     * in `set-auth-token`, which is where POST /api/mobile/auth/login reads it.
+     *
+     * The token is the session row's own token — opaque, revocable by deleting
+     * the session, and expiring with it. It carries no readable `exp`, so the
+     * app falls back to its 30-day default and the server stays the authority.
+     */
+    bearer(),
+
+    /**
+     * Six-digit codes, for the app only.
+     *
+     * `overrideDefaultEmailVerification` is deliberately left off: the web's
+     * verify-and-reset links keep working exactly as they did, and the codes
+     * are a second channel used by the /api/mobile/auth/* routes. Turning it on
+     * would swap the web over too and make a browser user type digits for no
+     * reason.
+     *
+     * Hashed at rest, because a code that grants a password reset is a
+     * credential — a leaked `verification` table should not be a set of live
+     * reset codes.
+     */
+    emailOTP({
+      otpLength: 6,
+      // Long enough to switch apps, find the mail and come back; the web's
+      // link gets an hour because a link is harder to retype.
+      expiresIn: 60 * 10,
+      allowedAttempts: 5,
+      storeOTP: "hashed",
+      // Never create an account from a code alone — sign-up is a password flow.
+      disableSignUp: true,
+      rateLimit: { window: 300, max: 3 },
+      async sendVerificationOTP({ email, otp, type }) {
+        if (type === "sign-in") return; // path is blocked below; belt and braces
+        await deliverAuthCode(type === "forget-password" ? "reset" : "verify", {
+          to: email,
+          // We have no name here, and the templates read fine without one.
+          name: email.split("@")[0],
+          code: otp,
+        });
+      },
+    }),
+
     organization({
       // The venue owner is whoever created it; staff are invited in.
       creatorRole: "owner",

@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:neon": "node scripts/dev-neon.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -18,6 +19,7 @@
     "admin:grant:neon": "tsx --env-file=.env.local scripts/grant-admin.ts",
     "test:admin": "tsx --env-file=.env.development.local scripts/test-admin.ts",
     "test:onboarding": "tsx --env-file=.env.development.local scripts/test-onboarding.ts",
+    "test:mobile-auth": "tsx --env-file=.env.local scripts/test-mobile-auth.ts",
     "worker": "tsx --env-file=.env.development.local scripts/worker.ts",
     "test:jobs": "tsx --env-file=.env.development.local scripts/test-jobs.ts",
     "db:backup": "sh scripts/backup.sh",
