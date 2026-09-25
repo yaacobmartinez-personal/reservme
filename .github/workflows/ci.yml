@@ -44,15 +44,28 @@ jobs:
       - run: npm ci
 
       # Fail the build on a high/critical advisory. Moderates are surfaced but
-      # don't gate (today: 5 moderate, all transitive under better-auth).
+      # don't gate (today: 4 moderate, the esbuild chain under drizzle-kit
+      # under better-auth — nothing we can bump without better-auth moving).
+      #
+      # This step runs FIRST, so a red audit hides lint, typecheck and the
+      # test suite behind it. If it starts failing, fix or re-scope it rather
+      # than leaving it red: the branch is not "one known failure", it is
+      # unverified.
       - name: Audit dependencies
         run: npm audit --audit-level=high
 
       - name: Lint
         run: npx eslint src scripts test packages
 
+      # `next typegen` first: LayoutProps, PageProps and the route unions live in
+      # .next/types and are generated, not written. Without this, tsc fails on
+      # every layout with "Cannot find name 'LayoutProps'" — which it did, for
+      # as long as the audit step above was masking it. Locally it passes only
+      # because a previous `build` or `dev` left the types behind.
       - name: Typecheck
-        run: npx tsc --noEmit
+        run: |
+          npx next typegen
+          npx tsc --noEmit
 
       - name: Build
         run: npm run build

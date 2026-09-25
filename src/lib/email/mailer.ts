@@ -25,6 +25,21 @@ export type SendResult =
 const FROM = process.env.EMAIL_FROM ?? "ReservMe <bookings@reservme.pro>";
 
 export async function sendEmail(email: Email): Promise<SendResult> {
+  /**
+   * AUTH_TEST_CAPTURE=1 means a test script is driving the app and reading the
+   * tokens and codes back out of the capture hooks. Nothing should leave the
+   * building in that mode.
+   *
+   * This matters more than it looks: `next dev` loads .env.local, so a local
+   * run already has the production Resend key in hand, and a test that
+   * hammers sign-up and forgot-password would be firing real mail at whatever
+   * addresses it invented.
+   */
+  if (process.env.AUTH_TEST_CAPTURE === "1") {
+    console.info(`[email:test] captured, not sent — to ${email.to}: "${email.subject}"`);
+    return { ok: true, id: null, delivered: false };
+  }
+
   // Prefer SMTP when configured — your own server / SES / Mailgun / etc.
   if (smtpConfigured()) {
     return sendViaSmtp(email, FROM);

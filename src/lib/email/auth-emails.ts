@@ -103,3 +103,80 @@ export async function deliverAuthEmail(
         : resetPasswordTemplate(name, url);
   return sendEmail({ to, subject: tpl.subject, html: tpl.html, text: tpl.text });
 }
+
+/* ── Codes, for the mobile app ─────────────────────────────────────── */
+
+/**
+ * The app cannot receive a click. A link would open a browser, verify there,
+ * and leave the app holding an unverified session it has no way to refresh —
+ * so the mobile flows send a six-digit code the person types back in.
+ *
+ * Deliberately a *second* channel rather than a replacement: the web keeps its
+ * links (`overrideDefaultEmailVerification` stays off), because a link is one
+ * tap in a browser and strictly better there.
+ */
+function codeBlock(code: string): string {
+  return `<div style="margin:0 0 18px;font-size:30px;font-weight:700;letter-spacing:0.18em;color:${PINE};font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;">${code}</div>`;
+}
+
+function verifyCodeTemplate(name: string, code: string) {
+  return {
+    subject: `${code} is your ReservMe code`,
+    html: shell(
+      "Confirm your email",
+      `<p style="margin:0 0 18px;color:${MUTE};font-size:15px;line-height:1.6;">Hi ${name}, enter this code in the ReservMe app to confirm your email.</p>
+       ${codeBlock(code)}
+       <p style="margin:0;color:${MUTE};font-size:12px;">It expires in 10 minutes. If you weren't expecting this, you can ignore it.</p>`,
+    ),
+    text: `Confirm your email
+
+Hi ${name}, enter this code in the ReservMe app:
+
+${code}
+
+It expires in 10 minutes.
+`,
+  };
+}
+
+function resetCodeTemplate(name: string, code: string) {
+  return {
+    subject: `${code} is your ReservMe reset code`,
+    html: shell(
+      "Reset your password",
+      `<p style="margin:0 0 18px;color:${MUTE};font-size:15px;line-height:1.6;">Hi ${name}, enter this code in the ReservMe app to choose a new password.</p>
+       ${codeBlock(code)}
+       <p style="margin:0;color:${MUTE};font-size:12px;">It expires in 10 minutes. Didn't ask for this? Ignore this email — your password won't change.</p>`,
+    ),
+    text: `Reset your password
+
+Hi ${name}, enter this code in the ReservMe app:
+
+${code}
+
+It expires in 10 minutes. Didn't ask for this? Ignore this email.
+`,
+  };
+}
+
+export type AuthCodeKind = "verify" | "reset";
+
+declare global {
+  var __authCodeCapture: { kind: AuthCodeKind; to: string; code: string } | undefined;
+}
+
+/** Test-only, same contract as [lastAuthCapture]. */
+export function lastAuthCodeCapture() {
+  return globalThis.__authCodeCapture ?? null;
+}
+
+export async function deliverAuthCode(
+  kind: AuthCodeKind,
+  { to, name, code }: { to: string; name: string; code: string },
+) {
+  if (process.env.AUTH_TEST_CAPTURE === "1") {
+    globalThis.__authCodeCapture = { kind, to, code };
+  }
+  const tpl = kind === "verify" ? verifyCodeTemplate(name, code) : resetCodeTemplate(name, code);
+  return sendEmail({ to, subject: tpl.subject, html: tpl.html, text: tpl.text });
+}
