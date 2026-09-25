@@ -1,8 +1,8 @@
 /**
- * Walks the whole mobile auth contract against a running dev server.
+ * Walks the whole mobile contract against a running dev server.
  *
- *   npm run dev:neon              # terminal 1
- *   npm run test:mobile-auth      # terminal 2
+ *   npm run dev:neon             # terminal 1
+ *   npm run test:mobile-api      # terminal 2
  *
  * It talks HTTP, not `auth.api`, so the proxy host check, the route handlers
  * and the bearer plugin are all in the path — the parts that only fail once
@@ -70,7 +70,7 @@ async function lastCode(): Promise<string | null> {
 }
 
 async function main() {
-  console.log(`\nMobile auth contract - ${BASE}\n`);
+  console.log(`\nMobile API contract - ${BASE}\n`);
 
   /* #25 sign up */
   console.log("POST /auth/signup  (#25)");
@@ -728,6 +728,198 @@ async function main() {
   }
 
 
+  /* #16 the day grid, #17 walk-ins, #18 move, #19 blocks, #20 customer search */
+  console.log("\nGET /venues/{slug}/calendar + bookings + blocks  (#16-#20)");
+
+  if (process.env.DATABASE_URL) {
+    const db = postgres(process.env.DATABASE_URL, { max: 1, onnotice: () => {} });
+    try {
+      const [{ org_id: orgId }] = await db<{ org_id: string }[]>`
+        SELECT id AS org_id FROM organization WHERE slug = ${slug}
+      `;
+      const [court] = await db<{ id: string }[]>`
+        INSERT INTO space (organization_id, name, slug, slot_minutes, price_cents, sort_order)
+        VALUES (${orgId}, 'Show Court', 'show-court', 60, 90000, 0) RETURNING id
+      `;
+      // Open every day, so the grid has an axis whichever day the test runs.
+      for (let weekday = 0; weekday < 7; weekday += 1) {
+        await db`
+          INSERT INTO opening_hours (space_id, weekday, opens_at, closes_at)
+          VALUES (${court.id}::uuid, ${weekday}, '08:00', '22:00')
+        `;
+      }
+      const [{ day }] = await db<{ day: string }[]>`
+        SELECT ((now() AT TIME ZONE 'Asia/Manila')::date + 2)::text AS day
+      `;
+
+      const grid = await call("GET", `/venues/${slug}/calendar?date=${day}`, { token: ownerToken });
+      check("the day grid reads back", grid.status === 200, grid.body);
+      check("for the day asked for", grid.body.date === day, grid.body.date);
+      const lanes = (grid.body.lanes ?? []) as Record<string, unknown>[];
+      check("with a lane for the space", lanes.some((l) => l.spaceId === court.id), lanes);
+      check(
+        "and an hour axis even though nothing is booked",
+        Array.isArray(grid.body.rows) && (grid.body.rows as string[]).length > 0,
+        grid.body.rows,
+      );
+      check(
+        "drawn from opening hours, not from what happens to be booked",
+        (grid.body.rows as string[])[0] === "08:00",
+        grid.body.rows,
+      );
+
+      const noDate = await call("GET", `/venues/${slug}/calendar`, { token: ownerToken });
+      check("no date falls back to the venue's today", noDate.status === 200, noDate.body);
+      const badDate = await call("GET", `/venues/${slug}/calendar?date=tuesday`, { token: ownerToken });
+      check("a malformed date is refused", badDate.status === 400, badDate.body);
+
+      /* #17 the walk-in */
+      const walkIn = await call("POST", `/venues/${slug}/bookings`, {
+        body: {
+          spaceId: court.id,
+          date: day,
+          time: "18:00",
+          slotCount: 2,
+          partySize: 4,
+          name: "Ramon Cruz",
+          email: `ramon-${stamp}@reservme.test`,
+          phone: "+639170000900",
+          notes: "Paying cash",
+        },
+        token: ownerToken,
+      });
+      check("a walk-in can be taken at the desk", walkIn.status === 201, walkIn.body);
+      const booked = (walkIn.body.booking ?? {}) as Record<string, unknown>;
+      check("and comes back as a run-sheet row", typeof booked.reference === "string", booked);
+      check("two slots means two of THIS space's slots", booked.label === "18:00\u201320:00", booked.label);
+      check("the party size is kept", booked.partySize === 4, booked);
+
+      const clash = await call("POST", `/venues/${slug}/bookings`, {
+        body: {
+          spaceId: court.id, date: day, time: "18:00", slotCount: 1, partySize: 2,
+          name: "Someone Else", email: `else-${stamp}@reservme.test`,
+        },
+        token: ownerToken,
+      });
+      check("a second booking on the same slot is refused", clash.status === 409, clash.body);
+      check("with a reason the grid can act on", typeof clash.body.reason === "string", clash.body);
+
+      const nameless = await call("POST", `/venues/${slug}/bookings`, {
+        body: { spaceId: court.id, date: day, time: "09:00", slotCount: 1, partySize: 2 },
+        token: ownerToken,
+      });
+      check("a booking with no customer at all is refused", nameless.status === 400, nameless.body);
+
+      const onGrid = await call("GET", `/venues/${slug}/calendar?date=${day}`, { token: ownerToken });
+      const items = (((onGrid.body.lanes ?? []) as Record<string, unknown>[])[0]?.items ?? []) as Record<string, unknown>[];
+      check("the booking is on the grid", items.some((i) => i.reference === booked.reference), items);
+      check("as a booking, not a block", items[0]?.kind === "booking", items[0]);
+
+      /* #18 move */
+      const moved = await call("POST", `/venues/${slug}/bookings/${booked.id}/move`, {
+        body: { spaceId: court.id, date: day, time: "20:00" },
+        token: ownerToken,
+      });
+      check("a booking can be moved", moved.status === 200, moved.body);
+      check(
+        "and carries its own length with it",
+        (moved.body.booking as Record<string, unknown>)?.label === "20:00\u201322:00",
+        moved.body.booking,
+      );
+
+      const moveOntoSelf = await call("POST", `/venues/${slug}/bookings/${booked.id}/move`, {
+        body: { spaceId: court.id, date: day, time: "bad" },
+        token: ownerToken,
+      });
+      check("a malformed move time is refused", moveOntoSelf.status === 400, moveOntoSelf.body);
+
+      /* #19 blocks */
+      const block = await call("POST", `/venues/${slug}/blocks`, {
+        body: { spaceId: court.id, date: day, from: "12:00", to: "14:00", reason: "Net repair" },
+        token: ownerToken,
+      });
+      check("a block can be put in", block.status === 201, block.body);
+      const blockRow = (block.body.block ?? {}) as Record<string, unknown>;
+      check("it is a block, not a booking", blockRow.kind === "block", blockRow);
+      check("and carries its reason", blockRow.title === "Net repair", blockRow);
+
+      const backwards = await call("POST", `/venues/${slug}/blocks`, {
+        body: { spaceId: court.id, date: day, from: "14:00", to: "12:00" },
+        token: ownerToken,
+      });
+      check("a backwards block is refused", backwards.status === 400, backwards.body);
+
+      const wholeVenue = await call("POST", `/venues/${slug}/blocks`, {
+        body: { date: day, from: "06:00", to: "07:00", reason: "Typhoon" },
+        token: ownerToken,
+      });
+      check("a whole-venue block needs no space", wholeVenue.status === 201, wholeVenue.body);
+      check(
+        "and says so",
+        ((wholeVenue.body.block ?? {}) as Record<string, unknown>).subtitle === "Whole venue",
+        wholeVenue.body.block,
+      );
+
+      const withBlocks = await call("GET", `/venues/${slug}/calendar?date=${day}`, { token: ownerToken });
+      const laneItems = (((withBlocks.body.lanes ?? []) as Record<string, unknown>[])[0]?.items ?? []) as Record<string, unknown>[];
+      check(
+        "a venue-wide block is drawn in every lane, not nowhere",
+        laneItems.filter((i) => i.kind === "block").length === 2,
+        laneItems.filter((i) => i.kind === "block"),
+      );
+
+      // A block stops NEW bookings; it does not cancel the ones inside it.
+      const intoBlock = await call("POST", `/venues/${slug}/bookings`, {
+        body: {
+          spaceId: court.id, date: day, time: "12:00", slotCount: 1, partySize: 2,
+          name: "Blocked Out", email: `blocked-${stamp}@reservme.test`,
+        },
+        token: ownerToken,
+      });
+      check("booking into a block is refused", intoBlock.status === 409, intoBlock.body);
+
+      const lifted = await call("DELETE", `/venues/${slug}/blocks/${blockRow.id}`, { token: ownerToken });
+      check("a block can be lifted", lifted.status === 200, lifted.body);
+      const goneTwice = await call("DELETE", `/venues/${slug}/blocks/${blockRow.id}`, { token: ownerToken });
+      check("and lifting it twice is a 404, not a crash", goneTwice.status === 404, goneTwice.body);
+
+      const nowFree = await call("POST", `/venues/${slug}/bookings`, {
+        body: {
+          spaceId: court.id, date: day, time: "12:00", slotCount: 1, partySize: 2,
+          name: "Free Again", email: `free-${stamp}@reservme.test`,
+        },
+        token: ownerToken,
+      });
+      check("and the slot is bookable again", nowFree.status === 201, nowFree.body);
+
+      /* #20 customer search */
+      const hits = await call("GET", `/venues/${slug}/customers?q=Ramon`, { token: ownerToken });
+      check("the typeahead finds a customer", hits.status === 200, hits.body);
+      const found = (hits.body.customers ?? []) as Record<string, unknown>[];
+      check("by name", found.some((c) => c.name === "Ramon Cruz"), found);
+      check(
+        "with the fields the sheet shows",
+        found[0]?.email !== undefined && found[0]?.bookings !== undefined,
+        found[0],
+      );
+
+      const noHits = await call("GET", `/venues/${slug}/customers?q=zzzznobody`, { token: ownerToken });
+      check(
+        "and an empty search is an empty list, not an error",
+        noHits.status === 200 && (noHits.body.customers as unknown[]).length === 0,
+        noHits.body,
+      );
+
+      await db`DELETE FROM closure WHERE organization_id = ${orgId}`;
+      await db`DELETE FROM reservation WHERE organization_id = ${orgId}`;
+      await db`DELETE FROM customer WHERE organization_id = ${orgId}`;
+      await db`DELETE FROM space WHERE organization_id = ${orgId} AND slug = 'show-court'`;
+    } finally {
+      await db.end();
+    }
+  }
+
+
   if (process.env.DATABASE_URL) {
     const db = postgres(process.env.DATABASE_URL, { max: 1, onnotice: () => {} });
     try {
@@ -737,6 +929,7 @@ async function main() {
       await db.end();
     }
   }
+
 
 
   /* #34 delete */

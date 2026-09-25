@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * GET /api/mobile/dev-only/last-code — the last six-digit code we would have
- * emailed, so scripts/test-mobile-auth.ts can finish flows that are otherwise
+ * emailed, so scripts/test-mobile-api.ts can finish flows that are otherwise
  * only completable from a mailbox.
  *
  * Not under `_test`: a leading underscore makes an App Router folder private
