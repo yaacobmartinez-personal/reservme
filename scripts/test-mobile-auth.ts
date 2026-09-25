@@ -342,6 +342,207 @@ async function main() {
         sub?.trial_ends_at,
       );
 
+      await db.end();
+    } finally {
+      // reopened below for the space checks
+    }
+  }
+
+  /* #28 spaces and hours, #30 settings — the rest of onboarding */
+  const NL = String.fromCharCode(10);
+  console.log(NL + "POST /venues/{slug}/spaces + hours + PATCH  (#28, #30)");
+
+  const noName2 = await call("POST", `/venues/${slug}/spaces`, {
+    body: { name: " ", kind: "court" },
+    token: ownerToken,
+  });
+  check("a space with no name is refused", noName2.status === 400, noName2.body);
+
+  const madeSpace = await call("POST", `/venues/${slug}/spaces`, {
+    body: { name: "Court 1", kind: "court", slotMinutes: 60, priceCents: 90000, capacity: 1 },
+    token: ownerToken,
+  });
+  check("the first space is created", madeSpace.status === 201, madeSpace.body);
+  const space = (madeSpace.body.space ?? {}) as Record<string, unknown>;
+  const spaceId = String(space.id ?? "");
+  check("it is on sale by default", space.isActive === true, space);
+  check("and priced as asked", space.priceCents === 90000, space);
+  check(
+    "and opens every day, or it would be unbookable the moment it exists",
+    Array.isArray(space.hours) && (space.hours as unknown[]).length === 7,
+    space.hours,
+  );
+  check("with no photo, so the kind placeholder shows", space.imageUrl === null, space);
+
+  const twin = await call("POST", `/venues/${slug}/spaces`, {
+    body: { name: "Court 1", kind: "court", slotMinutes: 60, priceCents: 90000 },
+    token: ownerToken,
+  });
+  const twinSlug = ((twin.body.space ?? {}) as Record<string, unknown>).slug;
+  check("a second space of the same name gets its own address", twinSlug === "court-1-2", twinSlug);
+
+  const hours = await call("PUT", `/venues/${slug}/spaces/${spaceId}/hours`, {
+    body: {
+      hours: [
+        ...[1, 2, 3, 4, 5, 6].map((weekday) => ({ weekday, opensAt: "09:00", closesAt: "22:00" })),
+      ],
+    },
+    token: ownerToken,
+  });
+  check("the week saves", hours.status === 200, hours.body);
+  const saved = ((hours.body.space ?? {}) as Record<string, unknown>).hours as
+    | Record<string, unknown>[]
+    | undefined;
+  check("Sunday is closed by being absent, not by a flag", saved?.length === 6, saved);
+  check("and Sunday is the missing one", !saved?.some((h) => h.weekday === 0), saved);
+  check(
+    "times come back as wall clock, not instants",
+    saved?.[0]?.opensAt === "09:00",
+    saved?.[0],
+  );
+
+  const backwards = await call("PUT", `/venues/${slug}/spaces/${spaceId}/hours`, {
+    body: {
+      hours: [
+        { weekday: 1, opensAt: "22:00", closesAt: "09:00" },
+        { weekday: 2, opensAt: "09:00", closesAt: "22:00" },
+      ],
+    },
+    token: ownerToken,
+  });
+  const kept = ((backwards.body.space ?? {}) as Record<string, unknown>).hours as
+    | Record<string, unknown>[]
+    | undefined;
+  check(
+    "a backwards day is dropped without losing the rest of the week",
+    backwards.status === 200 && kept?.length === 1 && kept[0].weekday === 2,
+    kept,
+  );
+
+  // Put the real week back before going live.
+  await call("PUT", `/venues/${slug}/spaces/${spaceId}/hours`, {
+    body: {
+      hours: [1, 2, 3, 4, 5, 6].map((weekday) => ({
+        weekday,
+        opensAt: "09:00",
+        closesAt: "22:00",
+      })),
+    },
+    token: ownerToken,
+  });
+
+  const renamed = await call("PATCH", `/venues/${slug}/spaces/${spaceId}`, {
+    body: { name: "Centre Court", kind: "court", slotMinutes: 60, priceCents: 95000 },
+    token: ownerToken,
+  });
+  check("the editor can rename and reprice", renamed.status === 200, renamed.body);
+  check(
+    "but the share link's address does not move under it",
+    ((renamed.body.space ?? {}) as Record<string, unknown>).slug === space.slug,
+    renamed.body.space,
+  );
+
+  const foreign = await call("GET", `/venues/${slug}/spaces/00000000-0000-4000-8000-000000000000`, {
+    token: ownerToken,
+  });
+  check("a space that is not ours is 404", foreign.status === 404, foreign.body);
+
+  const paused = await call("POST", `/venues/${slug}/spaces/${spaceId}/active`, {
+    body: { active: false },
+    token: ownerToken,
+  });
+  check("a space can be paused", paused.status === 200, paused.body);
+  check(
+    "which is what the delete refusal offers instead",
+    ((paused.body.space ?? {}) as Record<string, unknown>).isActive === false,
+    paused.body.space,
+  );
+  await call("POST", `/venues/${slug}/spaces/${spaceId}/active`, {
+    body: { active: true },
+    token: ownerToken,
+  });
+
+  const settings = await call("GET", `/venues/${slug}/settings`, { token: ownerToken });
+  check("settings read back", settings.status === 200, settings.body);
+  const vs = (settings.body.venue ?? {}) as Record<string, unknown>;
+  check("with the policy defaults", vs.cancellationMode === "grace", vs);
+  check("and the venue not suspended", vs.suspended === false, vs);
+
+  const live = await call("PATCH", `/venues/${slug}`, {
+    body: {
+      cancellationMode: "grace",
+      cancellationGraceHours: 24,
+      minNoticeMinutes: 60,
+      maxHorizonDays: 60,
+    },
+    token: ownerToken,
+  });
+  check("going live saves the policy alone", live.status === 200, live.body);
+  check(
+    "without wiping the name it never sent",
+    ((live.body.venue ?? {}) as Record<string, unknown>).name === "Walk Courts",
+    live.body.venue,
+  );
+  check(
+    "and hands back the booking link for the poster",
+    String(live.body.bookingUrl).endsWith(`/${slug}`),
+    live.body.bookingUrl,
+  );
+  check("and names the space, so O7 does not say 'your space'", live.body.spaceName != null, live.body);
+
+  // Found on a device: the PATCH answered 200 and the app said "Something went
+  // wrong", because onboarding parses `venue` as a VenueMembership while the
+  // settings screen parses the same field as VenueSettings. One object has to
+  // satisfy both.
+  const lv = (live.body.venue ?? {}) as Record<string, unknown>;
+  for (const field of ["orgId", "role", "activeSpaces", "slug", "name", "timezone", "currency", "theme", "suspended"]) {
+    check(`the venue carries ${field}, which one of its two parsers needs`, lv[field] !== undefined, lv);
+  }
+
+  const themed = await call("PATCH", `/venues/${slug}`, {
+    body: { theme: "ocean", tagline: "Book a court in seconds" },
+    token: ownerToken,
+  });
+  check(
+    "settings can change the theme without touching policy",
+    ((themed.body.venue ?? {}) as Record<string, unknown>).theme === "ocean" &&
+      ((themed.body.venue ?? {}) as Record<string, unknown>).cancellationGraceHours === 24,
+    themed.body.venue,
+  );
+
+  const cleared = await call("PATCH", `/venues/${slug}`, {
+    body: { tagline: "" },
+    token: ownerToken,
+  });
+  check(
+    "an emptied field clears rather than staying put",
+    ((cleared.body.venue ?? {}) as Record<string, unknown>).tagline === null,
+    cleared.body.venue,
+  );
+
+  const badTheme = await call("PATCH", `/venues/${slug}`, {
+    body: { theme: "neon" },
+    token: ownerToken,
+  });
+  check("an unknown theme is refused", badTheme.status === 400, badTheme.body);
+
+  const otherVenue = await call("GET", "/venues/somebody-elses-venue/settings", {
+    token: ownerToken,
+  });
+  check(
+    "a venue we do not belong to is 404, not 403 — 403 would confirm it exists",
+    otherVenue.status === 404,
+    otherVenue.body,
+  );
+
+  const deleteSpace = await call("DELETE", `/venues/${slug}/spaces/${spaceId}`, {
+    token: ownerToken,
+  });
+  check("an unbooked space can be deleted", deleteSpace.status === 200, deleteSpace.body);
+
+  if (process.env.DATABASE_URL) {
+    const db = postgres(process.env.DATABASE_URL, { max: 1, onnotice: () => {} });
+    try {
       // A venue with an owner cannot be deleted, so hand it off before #34.
       await db`DELETE FROM "organization" WHERE id = ${String(venue.orgId)}`;
     } finally {
