@@ -57,8 +57,15 @@ jobs:
       - name: Lint
         run: npx eslint src scripts test packages
 
+      # `next typegen` first: LayoutProps, PageProps and the route unions live in
+      # .next/types and are generated, not written. Without this, tsc fails on
+      # every layout with "Cannot find name 'LayoutProps'" — which it did, for
+      # as long as the audit step above was masking it. Locally it passes only
+      # because a previous `build` or `dev` left the types behind.
       - name: Typecheck
-        run: npx tsc --noEmit
+        run: |
+          npx next typegen
+          npx tsc --noEmit
 
       - name: Build
         run: npm run build
