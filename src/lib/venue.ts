@@ -17,6 +17,8 @@ export type PublicVenue = {
   gcashName: string | null;
   /** How far ahead customers may book — the date picker's ceiling. */
   maxHorizonDays: number;
+  /** How soon before a slot a customer may still book it — the floor. */
+  minNoticeMinutes: number;
   /** Set by a platform admin. A suspended venue takes no new bookings. */
   suspendedAt: Date | null;
 };
@@ -28,7 +30,12 @@ export type VenueSpace = {
   kind: string;
   priceCents: number;
   slotMinutes: number;
+  bufferMinutes: number;
+  capacity: number;
+  sortOrder: number;
   imageUrl: string | null;
+  /** The highest price any rule charges here, when the space has rules. */
+  peakPriceCents: number | null;
 };
 
 export async function getVenueBySlug(slug: string): Promise<PublicVenue | null> {
@@ -49,13 +56,14 @@ export async function getVenueBySlug(slug: string): Promise<PublicVenue | null> 
       refund_terms: string | null;
       gcash_name: string | null;
       max_horizon_days: number;
+      min_notice_minutes: number;
       suspended_at: Date | null;
     }[]
   >`
     SELECT o.id AS organization_id, o.name, o.slug, o.logo,
            v.tagline, v.address, v.timezone, v.currency, v.theme, v.cover_url,
            v.cancellation_mode, v.cancellation_grace_hours, v.refund_terms,
-           v.gcash_name, v.max_horizon_days, v.suspended_at
+           v.gcash_name, v.max_horizon_days, v.min_notice_minutes, v.suspended_at
     FROM organization o
     JOIN venue v ON v.organization_id = o.id
     WHERE o.slug = ${slug}
@@ -79,6 +87,7 @@ export async function getVenueBySlug(slug: string): Promise<PublicVenue | null> 
     refundTerms: row.refund_terms,
     gcashName: row.gcash_name,
     maxHorizonDays: row.max_horizon_days,
+    minNoticeMinutes: row.min_notice_minutes,
     suspendedAt: row.suspended_at,
   };
 }
@@ -92,13 +101,20 @@ export async function getVenueSpaces(organizationId: string): Promise<VenueSpace
       kind: string;
       price_cents: number;
       slot_minutes: number;
+      buffer_minutes: number;
+      capacity: number;
+      sort_order: number;
       image_url: string | null;
+      peak_price_cents: number | null;
     }[]
   >`
-    SELECT id, name, slug, kind, price_cents, slot_minutes, image_url
-    FROM space
-    WHERE organization_id = ${organizationId} AND is_active = true
-    ORDER BY sort_order, name
+    SELECT s.id, s.name, s.slug, s.kind, s.price_cents, s.slot_minutes,
+           s.buffer_minutes, s.capacity, s.sort_order, s.image_url,
+           (SELECT max(pr.price_cents) FROM pricing_rule pr
+             WHERE pr.space_id = s.id AND pr.price_cents > s.price_cents) AS peak_price_cents
+    FROM space s
+    WHERE s.organization_id = ${organizationId} AND s.is_active = true
+    ORDER BY s.sort_order, s.name
   `;
 
   return rows.map((row) => ({
@@ -108,7 +124,11 @@ export async function getVenueSpaces(organizationId: string): Promise<VenueSpace
     kind: row.kind,
     priceCents: row.price_cents,
     slotMinutes: row.slot_minutes,
+    bufferMinutes: row.buffer_minutes,
+    capacity: row.capacity,
+    sortOrder: row.sort_order,
     imageUrl: row.image_url,
+    peakPriceCents: row.peak_price_cents,
   }));
 }
 
