@@ -244,6 +244,112 @@ async function main() {
     check("the new one does", newPassword.status === 200, newPassword.body);
   }
 
+  /* #27 create a venue */
+  console.log("\nPOST /venues + /venues/slug-available  (#27)");
+  const owner = await call("POST", "/auth/login", { body: { email: EMAIL, password: NEW_PASSWORD } });
+  const ownerToken = owner.body.token as string | undefined;
+  const slug = `walk-courts-${stamp}`;
+
+  const slugAnon = await call("GET", `/venues/slug-available?slug=${slug}`);
+  check("the slug check needs a session, or it enumerates venues", slugAnon.status === 401, slugAnon.body);
+
+  const free = await call("GET", `/venues/slug-available?slug=${slug}`, { token: ownerToken });
+  check("an unused address is available", free.status === 200 && free.body.available === true, free.body);
+
+  const reserved = await call("GET", "/venues/slug-available?slug=privacy", { token: ownerToken });
+  check(
+    "a reserved address is refused, not 4xx",
+    reserved.status === 200 && reserved.body.available === false,
+    reserved.body,
+  );
+  check(
+    "and says who has it",
+    String(reserved.body.reason).includes("ReservMe itself"),
+    reserved.body.reason,
+  );
+
+  const shouty = await call("GET", "/venues/slug-available?slug=Not%20A%20Slug", { token: ownerToken });
+  check(
+    "a malformed address is refused in the app's words",
+    shouty.body.reason === "Letters, numbers and dashes only.",
+    shouty.body,
+  );
+
+  const noName = await call("POST", "/venues", {
+    body: { name: "  ", slug, timezone: "Asia/Manila", currency: "PHP" },
+    token: ownerToken,
+  });
+  check("a venue with no name is refused", noName.status === 400, noName.body);
+  check(
+    "naming the field, so O3 can put it under the input",
+    (noName.body.fieldErrors as Record<string, string>)?.name === "Give your venue a name.",
+    noName.body,
+  );
+
+  const badZone = await call("POST", "/venues", {
+    body: { name: "Walk Courts", slug, timezone: "Mars/Olympus", currency: "PHP" },
+    token: ownerToken,
+  });
+  check("a timezone we cannot resolve is refused", badZone.status === 400, badZone.body);
+
+  const created = await call("POST", "/venues", {
+    body: {
+      name: "Walk Courts",
+      slug,
+      timezone: "Asia/Manila",
+      currency: "PHP",
+      address: "12 Esteban Abada St, Loyola Heights, QC",
+    },
+    token: ownerToken,
+  });
+  check("the venue is created", created.status === 201, created.body);
+  const venue = (created.body.venue ?? {}) as Record<string, unknown>;
+  check("the caller is its owner", venue.role === "owner", venue);
+  check("it carries the timezone it was given", venue.timezone === "Asia/Manila", venue);
+  check("and no spaces yet", venue.activeSpaces === 0, venue);
+  check("and is not suspended", venue.suspended === false, venue);
+
+  const again = await call("POST", "/venues", {
+    body: { name: "Walk Courts", slug, timezone: "Asia/Manila", currency: "PHP" },
+    token: ownerToken,
+  });
+  check(
+    "creating it twice hands back the same venue, not a refusal",
+    again.status === 201 && (again.body.venue as Record<string, unknown>)?.orgId === venue.orgId,
+    again.body,
+  );
+
+  const nowTaken = await call("GET", `/venues/slug-available?slug=${slug}`, { token: ownerToken });
+  check("the address now reads as taken", nowTaken.body.available === false, nowTaken.body);
+
+  const onMe = await call("GET", "/me", { token: ownerToken });
+  check(
+    "and it shows up on /me",
+    ((onMe.body.venues ?? []) as Record<string, unknown>[]).some((v) => v.slug === slug),
+    onMe.body.venues,
+  );
+
+  if (process.env.DATABASE_URL) {
+    const db = postgres(process.env.DATABASE_URL, { max: 1, onnotice: () => {} });
+    try {
+      const [sub] = await db<{ status: string; trial_ends_at: Date }[]>`
+        SELECT status, trial_ends_at FROM subscription WHERE organization_id = ${String(venue.orgId)}
+      `;
+      check("a trialing subscription exists", sub?.status === "trialing", sub);
+      check(
+        "with a month on it, so billing has something to count down",
+        sub != null && sub.trial_ends_at.getTime() > Date.now() + 27 * 864e5,
+        sub?.trial_ends_at,
+      );
+
+      // A venue with an owner cannot be deleted, so hand it off before #34.
+      await db`DELETE FROM "organization" WHERE id = ${String(venue.orgId)}`;
+    } finally {
+      await db.end();
+    }
+  }
+
+
   /* #34 delete */
   console.log("\nDELETE /me  (#34)");
   const final = await call("POST", "/auth/login", {
