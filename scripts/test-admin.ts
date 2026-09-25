@@ -192,11 +192,25 @@ async function main() {
     /* ── Impersonation is server-side state ── */
     console.log("\nImpersonation");
     const forgedCookie = `${adminSession.cookie}; reservme_impersonation=not-a-real-token`;
-    response = await send(ADMIN_HOST, "/viewing", { cookie: forgedCookie });
-    const viewingBody = response.body;
+    // /admin/viewing was deleted in bf7621c, when impersonation was finished
+    // and the console got a sidebar — this asked a route that no longer exists
+    // and had been failing on a 404 ever since, behind the red audit step.
+    //
+    // The property it was guarding is unchanged and worth keeping, so it is
+    // asserted where it actually matters: `currentVenue()` checks the
+    // impersonation cookie FIRST, on whichever host carries it, so a forged
+    // token must not open the venue app.
+    response = await send(APP_HOST, "/", { cookie: forgedCookie });
     check(
-      "a forged impersonation cookie grants nothing",
-      viewingBody.includes("Not viewing anyone") || response.status === 307,
+      "a forged impersonation cookie opens no venue",
+      !/run sheet/i.test(response.body),
+      `status ${response.status}`,
+    );
+    // And the console itself still answers to the admin, unimpersonated.
+    response = await send(ADMIN_HOST, "/", { cookie: forgedCookie });
+    check(
+      "and the console still answers the admin normally",
+      response.status === 200,
       `status ${response.status}`,
     );
 

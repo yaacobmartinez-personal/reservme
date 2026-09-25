@@ -131,11 +131,16 @@ async function main() {
       `status ${publicPage.status}`,
     );
 
-    /* 6 · The dashboard flips from first-run to the run sheet */
+    /* 6 · The dashboard flips from first-run to the run sheet.
+       Matched case-insensitively and without the apostrophe: the panel is
+       titled "Today's run sheet", and an apostrophe comes back escaped in the
+       RSC payload. This asserted "Run sheet" with a capital R, which the
+       dashboard has not rendered since it was redesigned — the check could
+       never pass, and the audit step above hid that for as long as it was red. */
     const liveDash = await send(APP_HOST, "/", { cookie });
     check(
       "dashboard now shows the run sheet, not the first-run",
-      liveDash.body.includes("Run sheet") && !liveDash.body.includes("Add your first space"),
+      /run sheet/i.test(liveDash.body) && !liveDash.body.includes("Add your first space"),
     );
 
     console.log(
