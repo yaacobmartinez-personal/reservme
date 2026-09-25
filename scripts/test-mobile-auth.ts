@@ -540,6 +540,194 @@ async function main() {
   });
   check("an unbooked space can be deleted", deleteSpace.status === 200, deleteSpace.body);
 
+  /* #14 Today, #15 the run-sheet actions */
+  console.log("\nGET /venues/{slug}/today + booking actions  (#14, #15)");
+
+  const empty = await call("GET", `/venues/${slug}/today`, { token: ownerToken });
+  check("today reads back on a venue with nothing in it", empty.status === 200, empty.body);
+  check(
+    "the date is the venue's own, not the server's",
+    /^\d{4}-\d{2}-\d{2}$/.test(String(empty.body.date)),
+    empty.body.date,
+  );
+  check(
+    "an empty run sheet is an empty list, not an error",
+    Array.isArray(empty.body.runSheet) && (empty.body.runSheet as unknown[]).length === 0,
+    empty.body.runSheet,
+  );
+
+  const emptyStats = (empty.body.stats ?? {}) as Record<string, number>;
+  for (const key of ["todayCount", "checkedIn", "upcomingCount", "activeSpaces", "totalSpaces", "todayRevenueCents"]) {
+    check(`stats carry ${key}`, typeof emptyStats[key] === "number", emptyStats);
+  }
+
+  if (process.env.DATABASE_URL) {
+    const db = postgres(process.env.DATABASE_URL, { max: 1, onnotice: () => {} });
+    try {
+      const [{ org_id: orgId }] = await db<{ org_id: string }[]>`
+        SELECT id AS org_id FROM organization WHERE slug = ${slug}
+      `;
+      const [space2] = await db<{ id: string }[]>`
+        INSERT INTO space (organization_id, name, slug, slot_minutes, price_cents, sort_order)
+        VALUES (${orgId}, 'Court A', 'court-a', 60, 90000, 0) RETURNING id
+      `;
+      const [cust] = await db<{ id: string }[]>`
+        INSERT INTO customer (organization_id, name, email, phone)
+        VALUES (${orgId}, 'Marites Reyes', ${`marites-${stamp}@reservme.test`}, '+639170000000')
+        RETURNING id
+      `;
+      // Today in the venue's own zone, so a booking lands on the sheet whatever
+      // hour the test runs and whatever the server thinks the date is.
+      const mk = async (ref: string, status: string, hour: number) => {
+        const [r] = await db<{ id: string }[]>`
+          INSERT INTO reservation (organization_id, space_id, customer_id, reference, kind,
+                                   status, party_size, amount_cents, starts_at, ends_at,
+                                   hold_expires_at)
+          VALUES (
+            ${orgId}, ${space2.id}::uuid, ${cust.id}::uuid, ${ref}, 'rental', ${status}, 2, 90000,
+            ((now() AT TIME ZONE 'Asia/Manila')::date + ${`${hour}:00`}::time) AT TIME ZONE 'Asia/Manila',
+            ((now() AT TIME ZONE 'Asia/Manila')::date + ${`${hour + 1}:00`}::time) AT TIME ZONE 'Asia/Manila',
+            -- A hold with no expiry is a slot blocked forever, and the schema
+            -- refuses it. Confirmed rows must leave it null.
+            ${status === "held" ? db`now() + interval '15 minutes'` : db`NULL`}
+          ) RETURNING id
+        `;
+        return r.id;
+      };
+      const ref = (n: string) => `${n}-${String(stamp).slice(-6)}`;
+      const bookingId = await mk(ref("AAA"), "confirmed", 10);
+      await mk(ref("BBB"), "held", 12);
+      // A block is a closure, never a reservation. If one is ever written as a
+      // session_block it must still stay off the run sheet.
+      await db`
+        INSERT INTO reservation (organization_id, space_id, reference, kind, status,
+                                 party_size, amount_cents, starts_at, ends_at)
+        VALUES (${orgId}, ${space2.id}::uuid, ${ref("ZZZ")}, 'session_block', 'confirmed', 1, 0,
+          ((now() AT TIME ZONE 'Asia/Manila')::date + '14:00'::time) AT TIME ZONE 'Asia/Manila',
+          ((now() AT TIME ZONE 'Asia/Manila')::date + '15:00'::time) AT TIME ZONE 'Asia/Manila')
+      `;
+
+      const today = await call("GET", `/venues/${slug}/today`, { token: ownerToken });
+      const sheet = (today.body.runSheet ?? []) as Record<string, unknown>[];
+      check("the run sheet has both live bookings", sheet.length === 2, sheet.map((r) => r.reference));
+      check("and no block, because a block is a closure", !sheet.some((r) => r.reference === ref("ZZZ")), sheet);
+      check("ordered by start time", sheet[0]?.reference === ref("AAA"), sheet);
+
+      const row = sheet[0];
+      check("the label is venue-local wall clock", row?.label === "10:00\u201311:00", row?.label);
+      check("with instants alongside, so the app can re-render them itself", typeof row?.startsAt === "string", row);
+      check("the customer comes through", row?.customerName === "Marites Reyes", row);
+      check("with their phone, for tap-to-call", row?.customerPhone === "+639170000000", row);
+      check("and their history — two bookings each, so neither is a first visit", row?.firstVisit === false, row);
+      check("no-show count starts at zero", row?.noShowCount === 0, row);
+
+      const stats = (today.body.stats ?? {}) as Record<string, number>;
+      check("stats count today's two", stats.todayCount === 2, stats);
+      check("nobody is checked in yet", stats.checkedIn === 0, stats);
+      check("takings count the confirmed one only, not the held one", stats.todayRevenueCents === 90000, stats);
+      // Measured as a change, not a total: the space section above leaves its
+      // second "Court 1" behind, so a hard-coded 1 asserts the wrong thing and
+      // breaks whenever that section does.
+      check(
+        "adding a space moves both space counts by one",
+        stats.totalSpaces === emptyStats.totalSpaces + 1 &&
+          stats.activeSpaces === emptyStats.activeSpaces + 1,
+        { before: emptyStats, after: stats },
+      );
+
+      const bad = await call("POST", `/venues/${slug}/bookings/${bookingId}/sabotage`, { token: ownerToken });
+      check("an unknown action is 404", bad.status === 404, bad.body);
+
+      const foreign = await call(
+        "POST",
+        `/venues/${slug}/bookings/00000000-0000-4000-8000-000000000000/checkin`,
+        { token: ownerToken },
+      );
+      check("a booking that is not ours is 404", foreign.status === 404, foreign.body);
+
+      const checkedIn = await call("POST", `/venues/${slug}/bookings/${bookingId}/checkin`, { token: ownerToken });
+      check("check-in works", checkedIn.status === 200, checkedIn.body);
+      check(
+        "and hands back the row, so the sheet updates one line",
+        (checkedIn.body.booking as Record<string, unknown>)?.checkedInAt != null,
+        checkedIn.body,
+      );
+
+      const afterCheckIn = await call("GET", `/venues/${slug}/today`, { token: ownerToken });
+      check(
+        "which the stats reflect",
+        ((afterCheckIn.body.stats ?? {}) as Record<string, number>).checkedIn === 1,
+        afterCheckIn.body.stats,
+      );
+
+      const undone = await call("POST", `/venues/${slug}/bookings/${bookingId}/undo-checkin`, { token: ownerToken });
+      check(
+        "undo clears it",
+        undone.status === 200 && (undone.body.booking as Record<string, unknown>)?.checkedInAt === null,
+        undone.body,
+      );
+
+      // A check-in time outside the booking is a typo; storing it would put the
+      // arrival outside the booking it belongs to.
+      const early = await call("POST", `/venues/${slug}/bookings/${bookingId}/checkin`, {
+        body: { at: "2020-01-01T00:00:00.000Z" },
+        token: ownerToken,
+      });
+      const earlyRow = (early.body.booking ?? {}) as Record<string, unknown>;
+      check(
+        "a check-in time before the slot is clamped into it",
+        early.status === 200 && String(earlyRow.checkedInAt) >= String(earlyRow.startsAt),
+        { clamped: earlyRow.checkedInAt, startsAt: earlyRow.startsAt },
+      );
+
+      await call("POST", `/venues/${slug}/bookings/${bookingId}/undo-checkin`, { token: ownerToken });
+
+      const noShow = await call("POST", `/venues/${slug}/bookings/${bookingId}/no-show`, { token: ownerToken });
+      check("no-show works", noShow.status === 200, noShow.body);
+      check(
+        "and it counts against the customer",
+        (noShow.body.booking as Record<string, unknown>)?.noShowCount === 1,
+        noShow.body,
+      );
+
+      const twice = await call("POST", `/venues/${slug}/bookings/${bookingId}/no-show`, { token: ownerToken });
+      check("marking it twice is a 409, not a 404", twice.status === 409, twice.body);
+      check("and names the state it is already in", twice.body.reason === "already_no_show", twice.body);
+
+      const goneFromSheet = await call("GET", `/venues/${slug}/today`, { token: ownerToken });
+      check(
+        "a no-show leaves the run sheet",
+        ((goneFromSheet.body.runSheet ?? []) as Record<string, unknown>[]).length === 1,
+        goneFromSheet.body.runSheet,
+      );
+
+      const [heldRow] = await db<{ id: string }[]>`
+        SELECT id FROM reservation WHERE organization_id = ${orgId} AND reference = ${ref("BBB")}
+      `;
+      const cancelled = await call("POST", `/venues/${slug}/bookings/${heldRow.id}/cancel`, { token: ownerToken });
+      check("a held booking can be cancelled from the desk", cancelled.status === 200, cancelled.body);
+      check(
+        "and comes back cancelled",
+        (cancelled.body.booking as Record<string, unknown>)?.status === "cancelled",
+        cancelled.body,
+      );
+
+      const emptied = await call("GET", `/venues/${slug}/today`, { token: ownerToken });
+      check(
+        "leaving the sheet empty",
+        ((emptied.body.runSheet ?? []) as Record<string, unknown>[]).length === 0,
+        emptied.body.runSheet,
+      );
+
+      await db`DELETE FROM reservation WHERE organization_id = ${orgId}`;
+      await db`DELETE FROM customer WHERE organization_id = ${orgId}`;
+      await db`DELETE FROM space WHERE organization_id = ${orgId}`;
+    } finally {
+      await db.end();
+    }
+  }
+
+
   if (process.env.DATABASE_URL) {
     const db = postgres(process.env.DATABASE_URL, { max: 1, onnotice: () => {} });
     try {
