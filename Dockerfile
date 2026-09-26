@@ -18,12 +18,19 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
-# Public env is inlined at build time; hosts are overridden at deploy via the
-# real values. Provide harmless defaults so the build doesn't fail on them.
-ENV NEXT_PUBLIC_APEX_HOST=reservme.pro \
-    NEXT_PUBLIC_APP_HOST=app.reservme.pro \
-    NEXT_PUBLIC_ADMIN_HOST=admin.reservme.pro \
-    NEXT_PUBLIC_PROTOCOL=https
+# NEXT_PUBLIC_* are inlined at build time -- in server code (the proxy's host
+# routing, Better Auth's trusted origins) as well as the client bundle -- so a
+# runtime env var cannot change them. They are build args instead: Render
+# passes a service's env vars to the build as args of the same name, so the
+# values set on the service are the ones baked in. Defaults: the real domains.
+ARG NEXT_PUBLIC_APEX_HOST=reservme.pro
+ARG NEXT_PUBLIC_APP_HOST=app.reservme.pro
+ARG NEXT_PUBLIC_ADMIN_HOST=admin.reservme.pro
+ARG NEXT_PUBLIC_PROTOCOL=https
+ENV NEXT_PUBLIC_APEX_HOST=$NEXT_PUBLIC_APEX_HOST
+ENV NEXT_PUBLIC_APP_HOST=$NEXT_PUBLIC_APP_HOST
+ENV NEXT_PUBLIC_ADMIN_HOST=$NEXT_PUBLIC_ADMIN_HOST
+ENV NEXT_PUBLIC_PROTOCOL=$NEXT_PUBLIC_PROTOCOL
 # `next build` imports every route to collect its config, and src/db opens its
 # pools (lazily — nothing connects) from serverEnv(), which refuses to run
 # without these. Placeholders on this one step only: they never reach the
