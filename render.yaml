@@ -99,6 +99,11 @@ envVarGroups:
         sync: false
       - key: R2_PUBLIC_URL
         sync: false
+      # Optional: send email through Brevo's HTTP API — for hosts that block
+      # SMTP (Render's free plan does). The sender in EMAIL_FROM must be
+      # verified in Brevo. Used when SMTP_HOST is unset.
+      - key: BREVO_API_KEY
+        sync: false
       # Optional: send email over SMTP instead of Resend. Set SMTP_HOST to
       # enable (it takes priority over RESEND_API_KEY). From address is
       # EMAIL_FROM above.

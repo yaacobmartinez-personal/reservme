@@ -25,6 +25,10 @@ const serverSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
 
+  // Brevo (optional). Transactional mail over HTTPS, for hosts that block
+  // SMTP; sends from a verified single sender without owning a domain.
+  BREVO_API_KEY: z.string().optional(),
+
   // Worker-free operation (optional). INLINE_JOBS=true runs event-driven jobs
   // (booking confirmation, webhooks) in-process instead of queuing to a worker;
   // CRON_SECRET gates /api/cron, which an external cron calls to run the

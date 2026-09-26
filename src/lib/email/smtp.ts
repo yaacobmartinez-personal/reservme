@@ -37,6 +37,12 @@ function getTransport(): Transporter {
         ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS ?? "" }
         : undefined,
       pool: true,
+      // nodemailer waits 2 minutes to connect by default. A host that blocks
+      // SMTP (Render's free plan does) then holds every request that sends
+      // mail for two minutes and fails silently; ten seconds fails it loudly.
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 20_000,
     });
   }
   return transport;
