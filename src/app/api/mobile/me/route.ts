@@ -1,6 +1,7 @@
 import { sql } from "@/db";
 import { auth } from "@/lib/auth";
 import { conflict, ok, unauthorized } from "@/lib/mobile/respond";
+import { isPlatformAdmin } from "@/lib/mobile/admin-json";
 import { membershipsFor, mobileUser, userJson } from "@/lib/mobile/session";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +17,13 @@ export async function GET(request: Request) {
   const user = await mobileUser(request);
   if (!user) return unauthorized();
 
-  return ok({ user: userJson(user), venues: await membershipsFor(user.id) });
+  // `platformAdmin` shows the app its Admin entry; every admin route still
+  // checks for itself.
+  const [venues, platformAdmin] = await Promise.all([
+    membershipsFor(user.id),
+    isPlatformAdmin(user.id),
+  ]);
+  return ok({ user: userJson(user), venues, platformAdmin });
 }
 
 /**

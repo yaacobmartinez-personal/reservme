@@ -2,12 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { sql } from "@/db";
 import { requirePlatformAdmin } from "@/lib/admin/access";
-import { recordAdminAction } from "@/lib/admin/audit";
-import { instapayConfig, liftBillingSuspension, setPlatformSettings } from "@/lib/billing";
-import { COVER_MAX_BYTES } from "@/lib/branding";
-import { dropImage, storeImage } from "@/lib/storage/r2";
+import * as ops from "@/lib/admin/operations";
 
 /**
  * Platform billing actions. Every one re-checks admin status server-side and is
@@ -20,64 +16,14 @@ const orgId = z.string().min(1);
 
 export async function approveBillingPayment(formData: FormData) {
   const admin = await requirePlatformAdmin();
-  const id = paymentId.parse(formData.get("paymentId"));
-
-  const approved = await sql.begin(async (tx) => {
-    const [pay] = await tx<{ organization_id: string; amount_cents: number; reference: string }[]>`
-      UPDATE billing_payment
-         SET status = 'approved', reviewed_by = ${admin.userId}, reviewed_at = now()
-       WHERE id = ${id}::uuid AND status = 'submitted'
-      RETURNING organization_id, amount_cents, reference
-    `;
-    if (!pay) return null;
-
-    // Extend from the later of now / the current paid-through (or trial end), so
-    // paying early never costs the venue days.
-    await tx`
-      UPDATE subscription
-         SET status = 'active',
-             paid_until = GREATEST(now(), COALESCE(paid_until, trial_ends_at)) + interval '1 month',
-             updated_at = now()
-       WHERE organization_id = ${pay.organization_id}
-    `;
-    return pay;
-  });
-
-  if (approved) {
-    // A verified payment brings a billing-suspended venue back online.
-    await liftBillingSuspension(approved.organization_id);
-    await recordAdminAction({
-      actorUserId: admin.userId,
-      action: "admin.approved_payment",
-      organizationId: approved.organization_id,
-      detail: { reference: approved.reference, amountCents: approved.amount_cents },
-    });
-  }
-
+  await ops.approvePayment({ userId: admin.userId }, paymentId.parse(formData.get("paymentId")));
   revalidatePath("/", "layout");
 }
 
 export async function rejectBillingPayment(formData: FormData) {
   const admin = await requirePlatformAdmin();
-  const id = paymentId.parse(formData.get("paymentId"));
   const note = String(formData.get("note") ?? "").trim() || null;
-
-  const [pay] = await sql<{ organization_id: string; reference: string }[]>`
-    UPDATE billing_payment
-       SET status = 'rejected', reviewed_by = ${admin.userId}, reviewed_at = now(), note = ${note}
-     WHERE id = ${id}::uuid AND status = 'submitted'
-    RETURNING organization_id, reference
-  `;
-
-  if (pay) {
-    await recordAdminAction({
-      actorUserId: admin.userId,
-      action: "admin.rejected_payment",
-      organizationId: pay.organization_id,
-      detail: note ? { reference: pay.reference, note } : { reference: pay.reference },
-    });
-  }
-
+  await ops.rejectPayment({ userId: admin.userId }, paymentId.parse(formData.get("paymentId")), note);
   revalidatePath("/", "layout");
 }
 
@@ -85,52 +31,19 @@ export async function markPaidUntil(formData: FormData) {
   const admin = await requirePlatformAdmin();
   const organizationId = orgId.parse(formData.get("organizationId"));
   const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(formData.get("paidUntil"));
-
-  await sql`
-    UPDATE subscription
-       SET status = 'active', paid_until = (${date}::date + interval '1 day')::timestamptz, updated_at = now()
-     WHERE organization_id = ${organizationId}
-  `;
-  await liftBillingSuspension(organizationId);
-
-  await recordAdminAction({
-    actorUserId: admin.userId,
-    action: "admin.marked_paid",
-    organizationId,
-    detail: { paidUntil: date },
-  });
-
+  await ops.markPaidUntil({ userId: admin.userId }, organizationId, date);
   revalidatePath("/", "layout");
 }
 
 export async function compSubscription(formData: FormData) {
   const admin = await requirePlatformAdmin();
-  const organizationId = orgId.parse(formData.get("organizationId"));
-  await sql`
-    UPDATE subscription SET status = 'comped', updated_at = now()
-     WHERE organization_id = ${organizationId}
-  `;
-  await liftBillingSuspension(organizationId);
-  await recordAdminAction({
-    actorUserId: admin.userId,
-    action: "admin.comped",
-    organizationId,
-  });
+  await ops.compSubscription({ userId: admin.userId }, orgId.parse(formData.get("organizationId")));
   revalidatePath("/", "layout");
 }
 
 export async function cancelSubscription(formData: FormData) {
   const admin = await requirePlatformAdmin();
-  const organizationId = orgId.parse(formData.get("organizationId"));
-  await sql`
-    UPDATE subscription SET status = 'cancelled', updated_at = now()
-     WHERE organization_id = ${organizationId}
-  `;
-  await recordAdminAction({
-    actorUserId: admin.userId,
-    action: "admin.cancelled_subscription",
-    organizationId,
-  });
+  await ops.cancelSubscription({ userId: admin.userId }, orgId.parse(formData.get("organizationId")));
   revalidatePath("/", "layout");
 }
 
@@ -148,32 +61,10 @@ export async function updateBillingConfig(formData: FormData) {
       payee: formData.get("payee") ?? "",
       account: formData.get("account") ?? "",
     });
-
-  // A pasted https URL passes through; an uploaded QR (data URL) goes to R2.
-  let qrUrl = parsed.qrUrl ?? "";
-  if (qrUrl.startsWith("data:")) {
-    const stored = await storeImage(qrUrl, "platform/instapay", COVER_MAX_BYTES);
-    if (!stored.ok) throw new Error(stored.error);
-    qrUrl = stored.url;
-  }
-
-  const before = await instapayConfig();
-
-  await setPlatformSettings(
-    {
-      instapay_qr_url: qrUrl,
-      instapay_payee: parsed.payee ?? "",
-      instapay_account: parsed.account ?? "",
-    },
-    admin.userId,
+  const result = await ops.updateBillingConfig(
+    { userId: admin.userId },
+    { qrUrl: parsed.qrUrl ?? "", payee: parsed.payee ?? "", account: parsed.account ?? "" },
   );
-
-  if (before.qrUrl && before.qrUrl !== qrUrl) await dropImage(before.qrUrl);
-
-  await recordAdminAction({
-    actorUserId: admin.userId,
-    action: "admin.updated_billing_config",
-  });
-
+  if (!result.ok) throw new Error(result.message);
   revalidatePath("/", "layout");
 }
