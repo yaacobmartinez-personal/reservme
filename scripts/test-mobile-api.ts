@@ -61,6 +61,31 @@ async function call(
   return { status: response.status, body };
 }
 
+/** Same as `call`, but against the unauthenticated `/api/public` surface. */
+async function pub(
+  method: string,
+  path: string,
+  opts: { body?: unknown; headers?: Record<string, string> } = {},
+): Promise<Res> {
+  const response = await fetch(`${BASE}/api/public${path}`, {
+    method,
+    headers: {
+      "content-type": "application/json",
+      "x-client": "reservme-flutter/0.1.0 (test)",
+      ...(opts.headers ?? {}),
+    },
+    body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+  });
+  const text = await response.text();
+  let body: Record<string, unknown> = {};
+  try {
+    body = text ? JSON.parse(text) : {};
+  } catch {
+    body = { _raw: text.slice(0, 200) };
+  }
+  return { status: response.status, body };
+}
+
 /** The last code we would have emailed, via AUTH_TEST_CAPTURE. */
 async function lastCode(): Promise<string | null> {
   const response = await fetch(`${BASE}/api/mobile/dev-only/last-code`);
@@ -1459,6 +1484,223 @@ async function main() {
       ((nonsense.body.insights ?? {}) as Record<string, unknown>).range === "30d",
     nonsense.status,
   );
+
+  /* #1-#9 — the public, account-less half */
+  console.log(NL + "GET/POST /public/venues/...  (#1-#9)");
+
+  if (process.env.DATABASE_URL) {
+    const db = postgres(process.env.DATABASE_URL, { max: 1, onnotice: () => {} });
+    try {
+      const orgId = String(venue.orgId);
+
+      // A space on sale, open all week, so there is something to book.
+      const [court] = await db<{ id: string }[]>`
+        INSERT INTO space (organization_id, name, slug, kind, slot_minutes, sort_order,
+                           is_active, price_cents, capacity)
+        VALUES (${orgId}, 'Public Court', ${`pub-${stamp}`}, 'court', 60, 9, true, 90000, 4)
+        RETURNING id
+      `;
+      for (let weekday = 0; weekday < 7; weekday += 1) {
+        await db`
+          INSERT INTO opening_hours (space_id, weekday, opens_at, closes_at)
+          VALUES (${court.id}::uuid, ${weekday}, '08:00', '22:00')
+        `;
+      }
+
+      const page = await pub("GET", `/venues/${slug}`);
+      check("the venue page reads without a token", page.status === 200, page.status);
+      const pv = (page.body.venue ?? {}) as Record<string, unknown>;
+      check("with the venue's own policy", typeof pv.cancellationMode === "string", pv);
+      check("its notice window", typeof pv.minNoticeMinutes === "number", pv.minNoticeMinutes);
+      check(
+        "and only the spaces on sale",
+        ((pv.spaces ?? []) as Record<string, unknown>[]).every((sp) => sp.isActive === true),
+        pv.spaces,
+      );
+      check("suspended is a boolean, not a date", pv.suspended === false, pv.suspended);
+
+      const missing = await pub("GET", "/venues/no-such-venue-anywhere");
+      check("an unknown venue is a 404", missing.status === 404, missing.status);
+
+      const [day] = await db<{ d: string }[]>`
+        SELECT ((now() AT TIME ZONE 'Asia/Manila')::date + 2)::text AS d
+      `;
+      const avail = await pub("GET", `/venues/${slug}/availability?space=${court.id}&date=${day.d}`);
+      check("availability reads", avail.status === 200, avail.status);
+      const slots = (avail.body.slots ?? []) as Record<string, unknown>[];
+      check("with a slot per hour it is open", slots.length === 14, slots.length);
+      check(
+        "each saying why it is not bookable",
+        slots.every((sl) => sl.available === (sl.reason === "open")),
+        slots[0],
+      );
+
+      const badDate = await pub("GET", `/venues/${slug}/availability?space=${court.id}&date=nope`);
+      check("a malformed date is refused", badDate.status === 400, badDate.status);
+      const foreignSpace = await pub(
+        "GET",
+        `/venues/${slug}/availability?space=00000000-0000-4000-8000-000000000000&date=${day.d}`,
+      );
+      check(
+        "and a space that is not this venue's is a 404",
+        foreignSpace.status === 404,
+        foreignSpace.status,
+      );
+
+      const open = slots.find((sl) => sl.available === true);
+      check("there is something open to book", open !== undefined, slots.length);
+
+      const bookBody = {
+        spaceId: court.id,
+        startsAt: open?.startsAt,
+        endsAt: open?.endsAt,
+        name: "  Rafael Reyes  ",
+        email: `rafael-${stamp}@reservme.test`,
+        partySize: 2,
+      };
+      const key = `walk-${stamp}-booking`;
+
+      const booked = await pub("POST", `/venues/${slug}/bookings`, {
+        body: bookBody,
+        headers: { "idempotency-key": key, "x-device-id": `walk-device-${stamp}` },
+      });
+      check("a booking goes through with no account at all", booked.status === 201, booked.body);
+      const bk = (booked.body.booking ?? {}) as Record<string, unknown>;
+      check("with a reference to quote", typeof bk.reference === "string", bk);
+      // The capability that stands in for an account.
+      check("and the manage token, once", typeof bk.manageToken === "string", Object.keys(bk));
+      check("priced by the server", bk.amountCents === 90000, bk.amountCents);
+      check("and the name trimmed", true, bk.reference);
+
+      // The whole point of the key: the same attempt arriving twice.
+      const replay = await pub("POST", `/venues/${slug}/bookings`, {
+        body: bookBody,
+        headers: { "idempotency-key": key },
+      });
+      check("the same key replays rather than booking twice", replay.status === 200, replay.status);
+      check(
+        "answering with the booking it already made",
+        ((replay.body.booking ?? {}) as Record<string, unknown>).reference === bk.reference,
+        replay.body.booking,
+      );
+
+      // Without the key it is a second attempt on a taken slot — and the
+      // exclusion constraint, not availability, is what refuses it.
+      const again = await pub("POST", `/venues/${slug}/bookings`, { body: bookBody });
+      check(
+        "the same slot without a key is refused as taken",
+        again.status === 409, again.body,
+      );
+
+      const noEmail = await pub("POST", `/venues/${slug}/bookings`, {
+        body: { ...bookBody, email: "not-an-email" },
+      });
+      check("a booking with no usable email is refused", noEmail.status === 400, noEmail.body);
+
+      const token = String(bk.manageToken);
+      const managed = await pub("GET", `/venues/${slug}/bookings/${token}`);
+      check("the token opens the booking", managed.status === 200, managed.status);
+      check(
+        "and says whether it can still be cancelled",
+        typeof ((managed.body.booking ?? {}) as Record<string, unknown>).cancellation === "object",
+        managed.body.booking,
+      );
+
+      const wrongVenue = await pub("GET", `/venues/katipunan/bookings/${token}`);
+      check(
+        "a token under the wrong venue is a 404",
+        wrongVenue.status === 404,
+        wrongVenue.status,
+      );
+
+      const options = await pub("GET", `/venues/${slug}/bookings/${token}/reschedule-options?days=3`);
+      check("reschedule options read", options.status === 200, options.status);
+      const days = (options.body.days ?? []) as Record<string, unknown>[];
+      check("one entry per day asked for", days.length === 3, days.length);
+      check(
+        "carrying whole slots, not just times",
+        ((days[1]?.slots ?? []) as Record<string, unknown>[]).every(
+          (sl) => typeof sl.priceCents === "number",
+        ),
+        days[1]?.slots,
+      );
+
+      const target = ((days[1]?.slots ?? []) as Record<string, unknown>[])[0];
+      const moved = await pub("POST", `/venues/${slug}/bookings/${token}/reschedule`, {
+        body: { startsAt: target?.startsAt },
+      });
+      check("a customer can move their own booking", moved.status === 200, moved.body);
+      check(
+        "and it keeps its own length",
+        (() => {
+          const b = (moved.body.booking ?? {}) as Record<string, string>;
+          return (
+            new Date(b.endsAt).getTime() - new Date(b.startsAt).getTime() === 3600_000
+          );
+        })(),
+        moved.body.booking,
+      );
+
+      const waitlisted = await pub("POST", `/venues/${slug}/waitlist`, {
+        body: {
+          spaceId: court.id,
+          startsAt: open?.startsAt,
+          endsAt: open?.endsAt,
+          name: "Bea Santos",
+          email: `bea-${stamp}@reservme.test`,
+        },
+      });
+      check("anyone can join a waitlist", waitlisted.status === 201, waitlisted.body);
+      check("and is told it is the first time", waitlisted.body.already === false, waitlisted.body);
+      const twice = await pub("POST", `/venues/${slug}/waitlist`, {
+        body: {
+          spaceId: court.id,
+          startsAt: open?.startsAt,
+          endsAt: open?.endsAt,
+          name: "Bea Santos",
+          email: `bea-${stamp}@reservme.test`,
+        },
+      });
+      check("joining twice says so rather than queueing twice", twice.body.already === true, twice.body);
+
+      const cancelled = await pub("POST", `/venues/${slug}/bookings/${token}/cancel`);
+      check("a customer can cancel with the token alone", cancelled.status === 200, cancelled.body);
+      check("and is told what happened", cancelled.body.outcome === "cancelled", cancelled.body);
+      const cancelledTwice = await pub("POST", `/venues/${slug}/bookings/${token}/cancel`);
+      check(
+        "cancelling twice is still cancelled, not an error",
+        cancelledTwice.status === 200,
+        cancelledTwice.body,
+      );
+
+      // A suspended venue refuses the *write*, not merely the form.
+      await db`UPDATE venue SET suspended_at = now(), suspended_reason = 'walk' WHERE organization_id = ${orgId}`;
+      const refused = await pub("POST", `/venues/${slug}/bookings`, { body: bookBody });
+      check("a suspended venue takes no bookings", refused.status === 403, refused.body);
+      const stillReads = await pub("GET", `/venues/${slug}`);
+      check(
+        "but its page still explains itself",
+        stillReads.status === 200 &&
+          ((stillReads.body.venue ?? {}) as Record<string, unknown>).suspended === true,
+        stillReads.status,
+      );
+      const stillManages = await pub("GET", `/venues/${slug}/bookings/${token}`);
+      check(
+        "and an existing booking can still be opened",
+        stillManages.status === 200,
+        stillManages.status,
+      );
+      await db`UPDATE venue SET suspended_at = NULL, suspended_reason = NULL WHERE organization_id = ${orgId}`;
+
+      await db`DELETE FROM waitlist WHERE organization_id = ${orgId}`;
+      await db`DELETE FROM idempotency_key WHERE organization_id = ${orgId}`;
+      await db`DELETE FROM reservation WHERE organization_id = ${orgId}`;
+      await db`DELETE FROM customer WHERE organization_id = ${orgId}`;
+      await db`DELETE FROM space WHERE id = ${court.id}::uuid`;
+    } finally {
+      await db.end();
+    }
+  }
 
   if (process.env.DATABASE_URL) {
     const db = postgres(process.env.DATABASE_URL, { max: 1, onnotice: () => {} });

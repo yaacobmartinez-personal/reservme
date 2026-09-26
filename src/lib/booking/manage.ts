@@ -75,6 +75,13 @@ export type ManageableBooking = {
   currency: string;
   status: string;
   startsAt: Date;
+  endsAt: Date;
+  kind: string;
+  partySize: number;
+  checkedInAt: Date | null;
+  notes: string | null;
+  spaceKind: string;
+  address: string | null;
   cancellation: CancelEligibility;
 };
 
@@ -108,6 +115,13 @@ export async function getManageableBooking(
       currency: string;
       status: string;
       starts_at: Date;
+      ends_at: Date;
+      kind: string;
+      party_size: number;
+      checked_in_at: Date | null;
+      notes: string | null;
+      space_kind: string;
+      address: string | null;
       cancellation_mode: CancellationMode;
       cancellation_grace_hours: number;
     }[]
@@ -119,6 +133,8 @@ export async function getManageableBooking(
              || '–' ||
              to_char(r.ends_at AT TIME ZONE v.timezone, 'HH24:MI') AS when_label,
            r.reference, r.amount_cents, v.currency, r.status, r.starts_at,
+           r.ends_at, r.kind, r.party_size, r.checked_in_at, r.notes,
+           s.kind AS space_kind, v.address,
            v.cancellation_mode, v.cancellation_grace_hours
     FROM reservation r
     JOIN organization o ON o.id = r.organization_id
@@ -145,6 +161,13 @@ export async function getManageableBooking(
     currency: row.currency,
     status: row.status,
     startsAt: row.starts_at,
+    endsAt: row.ends_at,
+    kind: row.kind,
+    partySize: row.party_size,
+    checkedInAt: row.checked_in_at,
+    notes: row.notes,
+    spaceKind: row.space_kind,
+    address: row.address,
     cancellation: cancelEligibility(
       row.status,
       row.starts_at,
@@ -172,6 +195,13 @@ export async function getBookingForCancel(
       space_id: string;
       status: string;
       starts_at: Date;
+      ends_at: Date;
+      kind: string;
+      party_size: number;
+      checked_in_at: Date | null;
+      notes: string | null;
+      space_kind: string;
+      address: string | null;
       cancellation_mode: CancellationMode;
       cancellation_grace_hours: number;
     }[]

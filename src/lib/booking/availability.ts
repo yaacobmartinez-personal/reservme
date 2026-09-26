@@ -15,6 +15,8 @@ export type Slot = {
   available: boolean;
   reason: "open" | "taken" | "closed" | "too_soon" | "too_far_ahead";
   priceCents: number;
+  /** True when a pricing rule raised this slot above the space's base price. */
+  peak: boolean;
 };
 
 type SlotRow = {
@@ -26,6 +28,7 @@ type SlotRow = {
   too_soon: boolean;
   too_far: boolean;
   price_cents: number;
+  base_price_cents: number;
 };
 
 /**
@@ -96,6 +99,7 @@ export async function getDayAvailability(
           ORDER BY pr.created_at DESC LIMIT 1),
         r.price_cents
       ) AS price_cents,
+      r.price_cents AS base_price_cents,
       -- A live reservation within buffer distance blocks the slot. The buffer
       -- is enforced here, not by the constraint: the constraint guards literal
       -- overlap, which is the part that must never be wrong.
@@ -139,6 +143,7 @@ export async function getDayAvailability(
       available: reason === "open",
       reason,
       priceCents: row.price_cents,
+      peak: row.price_cents > row.base_price_cents,
     };
   });
 }

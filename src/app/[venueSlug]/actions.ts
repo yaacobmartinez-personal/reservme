@@ -7,15 +7,9 @@ import { clientIp, verifyTurnstile } from "@/lib/abuse";
 import { BookingError } from "@/lib/booking/errors";
 import { captureException } from "@/lib/observability";
 import { reserveSpace } from "@/lib/booking/reserve";
-import {
-  enqueueBookingConfirmation,
-  scheduleBookingReminder,
-} from "@/lib/jobs/enqueue";
+import { announceBooking, applyBookingDiscounts } from "@/lib/booking/public-book";
 import { rateLimit } from "@/lib/rate-limit";
-import { consumePromo, validatePromo } from "@/lib/promo";
-import { redeemForBooking } from "@/lib/memberships";
-import { emitBookingEvent } from "@/lib/webhooks";
-import { sql } from "@/db";
+import { validatePromo } from "@/lib/promo";
 import { getVenueBySlug } from "@/lib/venue";
 
 const bookingSchema = z.object({
@@ -110,91 +104,19 @@ export async function bookSlot(
       customer: { name: input.name, email: input.email, phone: input.phone },
     });
 
-    // Running amount after each discount, so promo then membership stack on the
-    // remaining balance. Each step is best-effort: the booking is committed, so
-    // a discount hiccup must never fail the customer.
-    let amountCents = reservation.amountCents;
-
-    // Claim the promo now that the booking exists. This is atomic (uses+1 under
-    // the cap), so a code that raced to its limit between validation and here
-    // simply yields no discount — the booking still stands at full price.
-    if (promo) {
-      try {
-        const applied = await consumePromo(
-          venue.organizationId,
-          promo,
-          reservation.id,
-          amountCents,
-        );
-        if (applied && applied.discountCents > 0) {
-          amountCents = Math.max(0, amountCents - applied.discountCents);
-          await sql`
-            UPDATE reservation SET amount_cents = ${amountCents}
-            WHERE id = ${reservation.id}::uuid
-          `;
-        }
-      } catch (promoError) {
-        // The booking is committed; a promo hiccup must not fail the customer.
-        captureException(promoError, {
-          where: "bookSlot.promo",
-          reservationId: reservation.id,
-          organizationId: venue.organizationId,
-        });
-      }
-    }
-
-    // Apply a pass credit or membership discount for a returning customer,
-    // matched by the booking email. Runs on whatever's left after the promo.
-    try {
-      const [cust] = await sql<{ id: string }[]>`
-        SELECT id FROM customer
-        WHERE organization_id = ${venue.organizationId} AND lower(email) = lower(${input.email})
-      `;
-      if (cust) {
-        const redeemed = await redeemForBooking(
-          venue.organizationId,
-          cust.id,
-          reservation.id,
-          amountCents,
-        );
-        if (redeemed && redeemed.discountCents > 0) {
-          amountCents = Math.max(0, amountCents - redeemed.discountCents);
-          await sql`
-            UPDATE reservation SET amount_cents = ${amountCents}
-            WHERE id = ${reservation.id}::uuid
-          `;
-        }
-      }
-    } catch (memberError) {
-      captureException(memberError, {
-        where: "bookSlot.membership",
-        reservationId: reservation.id,
-        organizationId: venue.organizationId,
-      });
-    }
+    // Promo then membership, stacking on the remaining balance. Shared with
+    // the app's endpoint so what a booking is worth is one answer, not two.
+    await applyBookingDiscounts(
+      venue.organizationId,
+      reservation.id,
+      reservation.amountCents,
+      input.email,
+      promo,
+    );
 
     revalidatePath(`/${input.venueSlug}`);
 
-    // Email is off the request path and best-effort: the booking is already
-    // committed, so a mail/queue hiccup must not turn a successful reservation
-    // into an error for the customer. The worker owns retries.
-    try {
-      const job = {
-        reservationId: reservation.id,
-        organizationId: venue.organizationId,
-      };
-      await enqueueBookingConfirmation(job);
-      await scheduleBookingReminder(job, reservation.startsAt);
-      await emitBookingEvent(venue.organizationId, "booking.created", reservation.id);
-    } catch (queueError) {
-      // The booking is committed; a failed enqueue only costs the email. Record
-      // it so a persistently broken queue is visible, but don't fail the user.
-      captureException(queueError, {
-        where: "bookSlot.enqueue",
-        reservationId: reservation.id,
-        organizationId: venue.organizationId,
-      });
-    }
+    await announceBooking(venue.organizationId, reservation.id, reservation.startsAt);
 
     const label = new Intl.DateTimeFormat("en-PH", {
       weekday: "short",

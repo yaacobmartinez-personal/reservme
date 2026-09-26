@@ -10,6 +10,7 @@ import {
   boolean,
   index,
   integer,
+  primaryKey,
   pgTable,
   smallint,
   text,
@@ -375,6 +376,29 @@ export const billingPayment = pgTable(
     createdAt,
   },
   (t) => [index("billing_payment_org_idx").on(t.organizationId, t.createdAt)],
+);
+
+/**
+ * What an `Idempotency-Key` produced (0017), so a booking retried after a
+ * dropped connection returns the first reservation rather than making a
+ * second. Disposable: rows only need to outlive a retry.
+ */
+export const idempotencyKey = pgTable(
+  "idempotency_key",
+  {
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    reservationId: uuid("reservation_id")
+      .notNull()
+      .references(() => reservation.id, { onDelete: "cascade" }),
+    createdAt,
+  },
+  (t) => [
+    primaryKey({ columns: [t.organizationId, t.key] }),
+    index("idempotency_key_created_idx").on(t.createdAt),
+  ],
 );
 
 export type WaitlistStatus = "waiting" | "notified" | "converted" | "expired";
