@@ -17,8 +17,8 @@
 # (cold start on first hit), so a cron ping doubles as a keep-warm. Bump to
 # `starter` for production.
 #
-# Migrations run as the container starts (dockerCommand → node migrate.js, then
-# the server); see the note on the service. No Render Postgres — DATABASE_URL points at your DB (Neon).
+# Migrations run as the container starts (dockerCommand → sh start.sh: migrate.js,
+# then the server); see the note on the service. No Render Postgres — DATABASE_URL points at your DB (Neon).
 #
 # NOTE: NEXT_PUBLIC_* are inlined into the client bundle at *build* time (see the
 # Dockerfile), where they default to the reservme.pro domains. If your public
@@ -33,12 +33,12 @@ services:
     region: singapore
     plan: free
     healthCheckPath: /api/healthz
-    # Migrations run as the container starts, not as a preDeployCommand:
-    # pre-deploy commands need a paid instance type, and a Blueprint that uses
-    # one asks for payment details even on `plan: free`. migrate.js records
-    # what it has applied, so a restart re-runs nothing. If a migration fails
-    # the server never starts and the previous deploy keeps serving.
-    dockerCommand: sh -c "node migrate.js && exec node server.js"
+    # Migrations run as the container starts (docker/start.sh), not as a
+    # preDeployCommand: pre-deploy commands need a paid instance type, and a
+    # Blueprint that uses one asks for payment details even on `plan: free`.
+    # A script, not an inline `sh -c "…"`: Render does not shell-parse quotes
+    # in dockerCommand.
+    dockerCommand: sh start.sh
     envVars:
       - fromGroup: reservme
 

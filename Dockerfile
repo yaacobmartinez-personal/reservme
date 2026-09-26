@@ -51,6 +51,7 @@ COPY --from=build /app/public ./public
 # Worker, migrator, and the raw SQL migrations they apply.
 COPY --from=build /app/dist ./
 COPY --from=build /app/drizzle ./drizzle
+COPY docker/start.sh ./start.sh
 
 USER app
 EXPOSE 3000
