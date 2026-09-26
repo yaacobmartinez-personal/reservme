@@ -145,4 +145,18 @@ describe("sendEmail transport order", () => {
     expect(error.mock.calls[0][0]).toContain("owner@example.com");
     expect(error.mock.calls[0][0]).toContain("Brevo 400");
   });
+
+  it("never writes a one-time code into the log", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("nope", { status: 400 })),
+    );
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await sendEmail({ ...EMAIL, subject: "043878 is your ReservMe reset code" });
+
+    const line = String(error.mock.calls[0][0]);
+    expect(line).not.toContain("043878");
+    expect(line).toContain("is your ReservMe reset code");
+  });
 });
