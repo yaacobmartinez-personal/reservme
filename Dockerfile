@@ -24,7 +24,11 @@ ENV NEXT_PUBLIC_APEX_HOST=reservme.pro \
     NEXT_PUBLIC_APP_HOST=app.reservme.pro \
     NEXT_PUBLIC_ADMIN_HOST=admin.reservme.pro \
     NEXT_PUBLIC_PROTOCOL=https
-RUN npm run build
+# `next build` imports every route to collect its config, and src/db opens its
+# pools (lazily — nothing connects) from serverEnv(), which refuses to run
+# without these. Placeholders on this one step only: they never reach the
+# runtime image, where Render supplies the real values.
+RUN DATABASE_URL=postgresql://build:build@build.invalid:5432/build \n    BETTER_AUTH_SECRET=build-time-placeholder-not-a-secret-000 \n    BETTER_AUTH_URL=https://app.reservme.pro \n    npm run build
 # Compile the worker + migrator to plain JS so the runtime image needs no tsx.
 RUN npx esbuild scripts/worker.ts scripts/migrate.ts \
       --bundle --platform=node --format=cjs --outdir=dist \
