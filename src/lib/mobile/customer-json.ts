@@ -6,6 +6,7 @@ import {
   type CustomerSegment,
   getCustomer,
 } from "@/lib/customers";
+import { holdingsJson } from "@/lib/mobile/growth-json";
 
 /**
  * Customers, shaped for the app (API-CONTRACT #20–#22).
@@ -87,6 +88,10 @@ function profileJson(p: CustomerProfile) {
       lifetimeValueCents: p.lifetimeValueCents,
       noShowCount: p.noShowCount,
       lastVisitDays: p.lastVisitDays,
+      // #43: loyalty accrues by a background job (1 point per ₱100 of a
+      // confirmed booking); the owner reads it, never edits it.
+      loyaltyPoints: p.loyaltyPoints,
+      marketingOptIn: p.marketingOptIn,
       createdAt: p.createdAt.toISOString(),
     },
     upcoming: p.upcoming.map(historyItem),
@@ -108,7 +113,9 @@ export async function customerDetail(
   timezone: string,
 ) {
   const profile = await getCustomer(organizationId, customerId, timezone);
-  return profile ? profileJson(profile) : null;
+  if (!profile) return null;
+  // #43: the passes and memberships this customer holds.
+  return { ...profileJson(profile), holdings: await holdingsJson(organizationId, customerId) };
 }
 
 /**

@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { sql } from "@/db";
 
 /**
@@ -97,4 +98,91 @@ export async function listPromoCodes(organizationId: string): Promise<PromoRow[]
     expiresAt: r.expires_at,
     active: r.active,
   }));
+}
+
+/* ── Codes: create and pause (web action and mobile API share these) ── */
+
+export const promoInputSchema = z
+  .object({
+    code: z
+      .string()
+      .trim()
+      .min(2, "A code needs at least 2 characters.")
+      .max(40)
+      .regex(/^[A-Za-z0-9]+$/, "Use letters and numbers only — no spaces."),
+    kind: z.enum(["percent", "amount"]),
+    /** A percentage, or whole pesos off. */
+    value: z.coerce.number().int().positive("Enter a discount greater than zero."),
+    maxUses: z.preprocess(
+      (v) => (v === "" || v == null ? undefined : v),
+      z.coerce.number().int().positive("Uses must be a whole number above zero.").optional(),
+    ),
+    /** Venue-local `YYYY-MM-DD`; the code works through the end of that day. */
+    expiresAt: z.preprocess(
+      (v) => (v === "" || v == null ? undefined : v),
+      z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a date.").optional(),
+    ),
+  })
+  .refine((d) => d.kind !== "percent" || (d.value >= 1 && d.value <= 100), {
+    message: "A percentage discount must be between 1 and 100.",
+    path: ["value"],
+  });
+
+export type PromoOutcome =
+  | { ok: true; id: string; code: string }
+  | { ok: false; field: string; message: string };
+
+/**
+ * Creates a code, upper-cased. A percentage is stored as-is and a peso amount
+ * in centavos. The expiry is end of day in the **venue's** zone, so a code set
+ * to expire "today" works through closing.
+ */
+export async function createPromo(
+  organizationId: string,
+  timezone: string,
+  raw: unknown,
+): Promise<PromoOutcome> {
+  const parsed = promoInputSchema.safeParse(raw);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    return { ok: false, field: String(issue.path[0] ?? "code"), message: issue.message };
+  }
+  const input = parsed.data;
+  const code = input.code.toUpperCase();
+  const value = input.kind === "amount" ? input.value * 100 : input.value;
+  // make_timestamptz from integer parts, never `${str}::timestamp AT TIME ZONE`:
+  // a bound wall-clock string is typed as a timestamp by the driver and shifts
+  // by the session's offset — "end of 1 Jan" came back eight hours early.
+  const expiresAt = input.expiresAt
+    ? (() => {
+        const [y, m, d] = input.expiresAt.split("-").map(Number);
+        return sql`make_timestamptz(${y}::int, ${m}::int, ${d}::int, 23, 59, 59, ${timezone}::text)`;
+      })()
+    : sql`NULL`;
+  try {
+    const [row] = await sql<{ id: string }[]>`
+      INSERT INTO promo_code (organization_id, code, kind, value, max_uses, expires_at)
+      VALUES (${organizationId}, ${code}, ${input.kind}, ${value}, ${input.maxUses ?? null}, ${expiresAt})
+      RETURNING id
+    `;
+    return { ok: true, id: row.id, code };
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "23505") {
+      return { ok: false, field: "code", message: `You already have a code named ${code}.` };
+    }
+    throw error;
+  }
+}
+
+export async function setPromoActive(
+  organizationId: string,
+  promoId: string,
+  active: boolean,
+): Promise<boolean> {
+  const rows = await sql`
+    UPDATE promo_code SET active = ${active}
+    WHERE id = ${promoId}::uuid AND organization_id = ${organizationId}
+    RETURNING id
+  `;
+  return rows.length > 0;
 }

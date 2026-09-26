@@ -14,8 +14,8 @@ import { venueUrl } from "@/lib/env";
  * already been done, so a repeated run is a no-op.
  */
 
-const POINTS_PER_PESO_CENTS = 10000; // ₱100 = 1 point.
-const AT_RISK_DAYS = 60; // No confirmed visit in this many days = at risk.
+export const POINTS_PER_PESO_CENTS = 10000; // ₱100 = 1 point.
+export const AT_RISK_DAYS = 60; // No confirmed visit in this many days = at risk.
 
 /** Awards loyalty for confirmed bookings not yet counted. Returns totals. */
 export async function accrueLoyalty(): Promise<{ customers: number; points: number }> {
@@ -145,4 +145,35 @@ export async function sendReviewRequests(): Promise<number> {
     sent += 1;
   }
   return sent;
+}
+
+/**
+ * The owner's review link (Google, Facebook…). Review requests only go out
+ * once one is set. Returns the refusal in the owner's words, or null.
+ */
+export function reviewUrlProblem(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "string") return "Enter a full link, e.g. https://g.page/…";
+  const trimmed = value.trim();
+  if (trimmed === "") return null;
+  try {
+    const url = new URL(trimmed);
+    return url.protocol === "https:" || url.protocol === "http:"
+      ? null
+      : "Enter a full link, e.g. https://g.page/…";
+  } catch {
+    return "Enter a full link, e.g. https://g.page/…";
+  }
+}
+
+export async function setReviewUrl(organizationId: string, value: string | null): Promise<void> {
+  const url = value?.trim() ? value.trim() : null;
+  await sql`UPDATE venue SET review_url = ${url} WHERE organization_id = ${organizationId}`;
+}
+
+export async function reviewUrlFor(organizationId: string): Promise<string | null> {
+  const [row] = await sql<{ review_url: string | null }[]>`
+    SELECT review_url FROM venue WHERE organization_id = ${organizationId}
+  `;
+  return row?.review_url ?? null;
 }
