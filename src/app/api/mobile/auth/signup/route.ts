@@ -78,9 +78,16 @@ export async function POST(request: Request) {
     // A six-digit code, because the app cannot receive a click. Best effort:
     // the account exists either way and the app offers "Skip for now", so a
     // mail outage must not lose the owner their sign-up.
-    await auth.api
+    // Not awaited. The account and the token already exist, so a slow or
+    // broken mail setup must not hold the answer: on Render's free plan an
+    // SMTP send hung for two minutes, the app gave up at thirty seconds, and
+    // the owner's retry met "that email already has an account" for an
+    // account they had just made. Verify is skippable and resendable.
+    void auth.api
       .sendVerificationOTP({ body: { email, type: "email-verification" } })
-      .catch(() => {});
+      .catch((error: unknown) => {
+        console.error("[signup] verification code not sent:", error);
+      });
 
     return ok(
       {
