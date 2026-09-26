@@ -37,9 +37,13 @@ export function proxy(request: NextRequest) {
   const isAppHost = host === APP_HOST.toLowerCase();
   const isAdminHost = host === ADMIN_HOST.toLowerCase();
 
-  // Health check answers on every host, unrewritten — orchestrators hit the
-  // container directly with whatever Host header they please.
-  if (pathname === "/api/healthz") return NextResponse.next();
+  // Health check and the worker-free cron trigger answer on every host,
+  // unrewritten — orchestrators and external crons hit the container directly
+  // with whatever Host header they please. /api/cron is secret-gated in the
+  // handler.
+  if (pathname === "/api/healthz" || pathname === "/api/cron") {
+    return NextResponse.next();
+  }
 
   // Auth endpoints are served unprefixed, and only on the signed-in surfaces.
   if (pathname.startsWith("/api/")) {
