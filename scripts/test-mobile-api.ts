@@ -462,6 +462,152 @@ async function main() {
     token: ownerToken,
   });
 
+  /* #29 peak pricing and closures — the rest of the space editor */
+  console.log(NL + "POST /spaces/{id}/pricing-rules + /closures  (#29)");
+
+  const noDays = await call("POST", `/venues/${slug}/spaces/${spaceId}/pricing-rules`, {
+    body: { weekdays: [], startsAt: "18:00", endsAt: "22:00", priceCents: 120000 },
+    token: ownerToken,
+  });
+  check(
+    "a rule for no days at all is refused",
+    noDays.status === 400 &&
+      (noDays.body.fieldErrors as Record<string, string>)?.weekdays === "Pick at least one day.",
+    noDays.body,
+  );
+
+  const backwardsRule = await call("POST", `/venues/${slug}/spaces/${spaceId}/pricing-rules`, {
+    body: { weekdays: [1], startsAt: "22:00", endsAt: "18:00", priceCents: 120000 },
+    token: ownerToken,
+  });
+  check(
+    "and so is one that ends before it starts",
+    backwardsRule.status === 400 &&
+      (backwardsRule.body.fieldErrors as Record<string, string>)?.endsAt ===
+        "The end time must be after the start.",
+    backwardsRule.body,
+  );
+
+  const rule = await call("POST", `/venues/${slug}/spaces/${spaceId}/pricing-rules`, {
+    body: {
+      label: "  Peak  ",
+      weekdays: [5, 1, 3],
+      startsAt: "18:00",
+      endsAt: "22:00",
+      priceCents: 120000,
+    },
+    token: ownerToken,
+  });
+  check("a peak rule goes in", rule.status === 201, rule.body);
+  // The answer is the whole space, so the editor redraws from one round trip.
+  const ruledSpace = (rule.body.space ?? {}) as Record<string, unknown>;
+  const rules = (ruledSpace.pricingRules ?? []) as Record<string, unknown>[];
+  check("and comes back on the space", rules.length === 1, rules);
+  check("with its label trimmed", rules[0]?.label === "Peak", rules[0]);
+  check(
+    "its days sorted",
+    JSON.stringify(rules[0]?.weekdays) === JSON.stringify([1, 3, 5]),
+    rules[0]?.weekdays,
+  );
+  check(
+    "and its window as wall clock, with no zone on it",
+    // "18:00", not an instant: a peak hour is the venue's evening, and must
+    // not move when a clock somewhere else changes.
+    rules[0]?.startsAt === "18:00" && rules[0]?.endsAt === "22:00",
+    rules[0],
+  );
+
+  const liftRule = await call(
+    "DELETE",
+    `/venues/${slug}/spaces/${spaceId}/pricing-rules/${rules[0]?.id}`,
+    { token: ownerToken },
+  );
+  check("a rule can be lifted", liftRule.status === 200, liftRule.body);
+  check(
+    "leaving the space with none",
+    (((liftRule.body.space ?? {}) as Record<string, unknown>).pricingRules as unknown[]).length === 0,
+    liftRule.body.space,
+  );
+  const liftedTwice = await call(
+    "DELETE",
+    `/venues/${slug}/spaces/${spaceId}/pricing-rules/${rules[0]?.id}`,
+    { token: ownerToken },
+  );
+  check("and lifting it twice is a 404, not a crash", liftedTwice.status === 404, liftedTwice.status);
+
+  const badWindow = await call("POST", `/venues/${slug}/closures`, {
+    body: { spaceId, date: "2026-12-26", from: "08:00", toDate: "2026-12-24", to: "22:00" },
+    token: ownerToken,
+  });
+  check(
+    "a closure that ends before it starts is refused",
+    badWindow.status === 400, badWindow.body,
+  );
+
+  const closure = await call("POST", `/venues/${slug}/closures`, {
+    body: {
+      spaceId,
+      date: "2026-12-24",
+      from: "08:00",
+      toDate: "2026-12-26",
+      to: "22:00",
+      reason: "Christmas",
+      forSpaceId: spaceId,
+    },
+    token: ownerToken,
+  });
+  check("a multi-day closure goes in", closure.status === 201, closure.body);
+  const closures = (((closure.body.space ?? {}) as Record<string, unknown>).closures ??
+    []) as Record<string, unknown>[];
+  check("and comes back on the space", closures.length === 1, closures);
+  check(
+    "built in the venue's zone, not the server's",
+    // 08:00 in Asia/Manila is 00:00 UTC, always.
+    String(closures[0]?.startsAt) === "2026-12-24T00:00:00.000Z",
+    closures[0]?.startsAt,
+  );
+
+  const venueWide = await call("POST", `/venues/${slug}/closures`, {
+    body: { date: "2026-12-31", from: "00:00", to: "23:00", reason: "Stocktake", forSpaceId: spaceId },
+    token: ownerToken,
+  });
+  check("a venue-wide closure needs no space", venueWide.status === 201, venueWide.body);
+  const bothClosures = (((venueWide.body.space ?? {}) as Record<string, unknown>).closures ??
+    []) as Record<string, unknown>[];
+  // It is not this space's closure, but it shuts it — an editor that hid it
+  // would show an open day that is not open.
+  check(
+    "and still shows on the space it shuts",
+    bothClosures.some((c) => c.spaceId === null),
+    bothClosures,
+  );
+
+  const lift = await call(
+    "DELETE",
+    `/venues/${slug}/closures/${closures[0]?.id}?forSpaceId=${spaceId}`,
+    { token: ownerToken },
+  );
+  check("a closure can be lifted", lift.status === 200, lift.body);
+  const liftedGone = await call(
+    "DELETE",
+    `/venues/${slug}/closures/${closures[0]?.id}?forSpaceId=${spaceId}`,
+    { token: ownerToken },
+  );
+  check("and lifting it twice is a 404", liftedGone.status === 404, liftedGone.status);
+  await call("DELETE", `/venues/${slug}/closures/${bothClosures.find((c) => c.spaceId === null)?.id}`, {
+    token: ownerToken,
+  });
+
+  const foreignRule = await call(
+    "POST",
+    `/venues/${slug}/spaces/00000000-0000-4000-8000-000000000000/pricing-rules`,
+    {
+      body: { weekdays: [1], startsAt: "18:00", endsAt: "22:00", priceCents: 1 },
+      token: ownerToken,
+    },
+  );
+  check("a rule on a space that is not ours is a 404", foreignRule.status === 404, foreignRule.status);
+
   const settings = await call("GET", `/venues/${slug}/settings`, { token: ownerToken });
   check("settings read back", settings.status === 200, settings.body);
   const vs = (settings.body.venue ?? {}) as Record<string, unknown>;
