@@ -70,6 +70,19 @@ export default async function AdminBillingPage() {
                     <p className="mt-0.5 text-[0.8125rem] text-ink-3">
                       Ref <span className="font-mono">{p.reference}</span> · paid{" "}
                       {new Intl.DateTimeFormat("en-PH", { dateStyle: "medium" }).format(p.paidAt)}
+                      {p.receiptUrl ? (
+                        <>
+                          {" · "}
+                          <a
+                            href={p.receiptUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="underline underline-offset-2"
+                          >
+                            receipt
+                          </a>
+                        </>
+                      ) : null}
                     </p>
                   </div>
                   <span className="font-mono text-[0.9375rem]">{formatMoney(p.amountCents, "PHP")}</span>

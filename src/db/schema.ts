@@ -367,6 +367,8 @@ export const billingPayment = pgTable(
     reference: text("reference").notNull(),
     paidAt: timestamp("paid_at", { withTimezone: true }).notNull(),
     status: text("status").$type<BillingPaymentStatus>().notNull().default("submitted"),
+    /** Screenshot of the transfer, for whoever approves it (0016). */
+    receiptUrl: text("receipt_url"),
     reviewedBy: text("reviewed_by").references(() => user.id, { onDelete: "set null" }),
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
     note: text("note"),
