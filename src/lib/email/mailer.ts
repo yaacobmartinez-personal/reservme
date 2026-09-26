@@ -34,7 +34,10 @@ const FROM = process.env.EMAIL_FROM ?? "ReservMe <bookings@reservme.pro>";
 export async function sendEmail(email: Email): Promise<SendResult> {
   const result = await send(email);
   if (!result.ok) {
-    console.error(`[email] failed to send to ${email.to} — "${email.subject}": ${result.error}`);
+    // Subjects carry one-time codes ("043878 is your ReservMe reset code"), and
+    // a code in the logs is a code anyone with log access can use.
+    const subject = email.subject.replace(/\d{4,}/g, "••••••");
+    console.error(`[email] failed to send to ${email.to} — "${subject}": ${result.error}`);
   }
   return result;
 }
