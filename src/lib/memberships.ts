@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { sql } from "@/db";
 
 /**
@@ -201,4 +202,75 @@ export async function redeemForBooking(
     `;
     return { creditsUsed: 0, discountCents };
   });
+}
+
+/* ── Plans: create and pause (web action and mobile API share these) ── */
+
+const optionalInt = <T extends z.ZodType>(schema: T) =>
+  z.preprocess((v) => (v === "" || v == null ? undefined : v), schema.optional());
+
+export const planInputSchema = z
+  .object({
+    name: z.string().trim().min(2, "Give the plan a name.").max(60),
+    kind: z.enum(["pass", "membership"]),
+    /** Whole pesos, as the owner types it. */
+    price: z.coerce.number().min(0, "Price can't be negative."),
+    credits: optionalInt(z.coerce.number().int().positive("Credits must be a whole number above zero.")),
+    discountPct: optionalInt(z.coerce.number().int().min(1).max(100)),
+    validDays: optionalInt(z.coerce.number().int().positive("Days must be a whole number above zero.")),
+  })
+  .refine((d) => d.credits != null || d.discountPct != null, {
+    message: "A plan needs either credits or a discount (or both).",
+    path: ["credits"],
+  });
+
+export type PlanInput = z.infer<typeof planInputSchema>;
+
+export type PlanOutcome =
+  | { ok: true; id: string; name: string }
+  | { ok: false; field: string; message: string };
+
+/**
+ * Creates a plan. A pass is one-time; a membership renews monthly — the kind
+ * decides the period, the owner does not pick it separately.
+ */
+export async function createPlan(organizationId: string, raw: unknown): Promise<PlanOutcome> {
+  const parsed = planInputSchema.safeParse(raw);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    return { ok: false, field: String(issue.path[0] ?? "name"), message: issue.message };
+  }
+  const d = parsed.data;
+  const period: PlanPeriod = d.kind === "membership" ? "monthly" : "one_time";
+  try {
+    const [row] = await sql<{ id: string }[]>`
+      INSERT INTO membership_plan
+        (organization_id, name, kind, price_cents, credits, period, benefit_discount_pct, valid_days)
+      VALUES (
+        ${organizationId}, ${d.name}, ${d.kind}, ${Math.round(d.price * 100)},
+        ${d.credits ?? null}, ${period}, ${d.discountPct ?? null}, ${d.validDays ?? null}
+      )
+      RETURNING id
+    `;
+    return { ok: true, id: row.id, name: d.name };
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "23505") {
+      return { ok: false, field: "name", message: `You already have a plan named ${d.name}.` };
+    }
+    throw error;
+  }
+}
+
+/** Pauses or resumes a plan. Holders keep what they have either way. */
+export async function setPlanActive(
+  organizationId: string,
+  planId: string,
+  active: boolean,
+): Promise<boolean> {
+  const rows = await sql`
+    UPDATE membership_plan SET active = ${active}
+    WHERE id = ${planId}::uuid AND organization_id = ${organizationId}
+    RETURNING id
+  `;
+  return rows.length > 0;
 }

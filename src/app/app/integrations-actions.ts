@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { sql } from "@/db";
+import { rotateIcalToken } from "@/lib/ical";
 import { createApiKey, revokeApiKey } from "@/lib/api-keys";
 import { createWebhook, deleteWebhook, WEBHOOK_EVENTS } from "@/lib/webhooks";
 import { requireRole } from "@/lib/tenancy";
@@ -12,10 +12,7 @@ const MANAGE = ["owner", "admin"] as const;
 /** Rotates the iCal feed token, invalidating any existing subscription URL. */
 export async function regenerateIcalToken() {
   const venue = await requireRole(...MANAGE);
-  await sql`
-    UPDATE venue SET ical_token = gen_random_uuid()
-    WHERE organization_id = ${venue.organizationId}
-  `;
+  await rotateIcalToken(venue.organizationId);
   revalidatePath("/settings");
 }
 

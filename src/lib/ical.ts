@@ -87,3 +87,23 @@ export async function buildIcalFeed(
   lines.push("END:VCALENDAR");
   return lines.join("\r\n") + "\r\n";
 }
+
+/**
+ * Rotates the feed token. Every calendar subscribed with the old URL stops
+ * updating — that is the point: it is how a leaked link is shut off.
+ */
+export async function rotateIcalToken(organizationId: string): Promise<string> {
+  const [row] = await sql<{ ical_token: string }[]>`
+    UPDATE venue SET ical_token = gen_random_uuid()
+    WHERE organization_id = ${organizationId}
+    RETURNING ical_token
+  `;
+  return row.ical_token;
+}
+
+export async function icalTokenFor(organizationId: string): Promise<string | null> {
+  const [row] = await sql<{ ical_token: string | null }[]>`
+    SELECT ical_token FROM venue WHERE organization_id = ${organizationId}
+  `;
+  return row?.ical_token ?? null;
+}
