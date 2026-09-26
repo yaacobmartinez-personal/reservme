@@ -1,23 +1,29 @@
-# Render Blueprint — deploys ReservMe as two services from the one Docker image:
+# Render Blueprint — deploys ReservMe as a SINGLE web service (worker-free), so
+# it fits Render's free plan without a paid background worker.
 #
-#   • reservme-web    — the Next.js app (apex marketing + booking, app dashboard,
-#                       admin console). Default CMD is `node server.js`.
-#   • reservme-worker — the background worker (pg-boss): confirmation & reminder
-#                       emails, hold sweep, loyalty accrual, engagement emails,
-#                       webhook delivery, and daily billing reminders + the
-#                       10-day-grace auto-suspend. Runs `node worker.js`.
+#   • reservme-web — the Next.js app (apex marketing + booking, app dashboard,
+#                    admin console). Default CMD is `node server.js`.
 #
-# Both build from ./Dockerfile and share one env group. Migrations run before
-# every web deploy goes live (preDeployCommand → node migrate.js). No Render
-# Postgres is created — DATABASE_URL points at your existing DB (e.g. Neon).
+# Worker-free operation: INLINE_JOBS=true runs the event-driven jobs (booking
+# confirmation email, webhook delivery) in the request; an external cron hits
+# GET /api/cron (gated by CRON_SECRET) every ~10 min to run the scheduled jobs
+# (hold-sweep, billing reminders + suspend, loyalty, engagement).
 #
-# After "New > Blueprint" in Render, fill the `sync: false` secrets in the
-# "reservme" env group once. Both services read from it.
+# Paid path: to run the dedicated pg-boss worker instead, un-comment the
+# reservme-worker service below, remove INLINE_JOBS from the env group, and stop
+# calling /api/cron. Render workers require a paid plan.
+#
+# The web `plan: free` deploys at no cost; free instances spin down when idle
+# (cold start on first hit), so a cron ping doubles as a keep-warm. Bump to
+# `starter` for production.
+#
+# Migrations run as the container starts (dockerCommand → node migrate.js, then
+# the server); see the note on the service. No Render Postgres — DATABASE_URL points at your DB (Neon).
 #
 # NOTE: NEXT_PUBLIC_* are inlined into the client bundle at *build* time (see the
 # Dockerfile), where they default to the reservme.pro domains. If your public
-# domains differ, change them in the Dockerfile too (or pass build args) — the
-# runtime values below only affect server-side host routing.
+# domains differ, change them in the Dockerfile too — the runtime values below
+# only affect server-side host routing.
 
 services:
   - type: web
@@ -25,21 +31,28 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     region: singapore
-    plan: starter
+    plan: free
     healthCheckPath: /api/healthz
-    preDeployCommand: node migrate.js
+    # Migrations run as the container starts, not as a preDeployCommand:
+    # pre-deploy commands need a paid instance type, and a Blueprint that uses
+    # one asks for payment details even on `plan: free`. migrate.js records
+    # what it has applied, so a restart re-runs nothing. If a migration fails
+    # the server never starts and the previous deploy keeps serving.
+    dockerCommand: sh -c "node migrate.js && exec node server.js"
     envVars:
       - fromGroup: reservme
 
-  - type: worker
-    name: reservme-worker
-    runtime: docker
-    dockerfilePath: ./Dockerfile
-    region: singapore
-    plan: starter
-    dockerCommand: node worker.js
-    envVars:
-      - fromGroup: reservme
+  # Paid path — a dedicated background worker instead of INLINE_JOBS + /api/cron.
+  # Un-comment this, remove INLINE_JOBS from the env group, and stop the cron.
+  # - type: worker
+  #   name: reservme-worker
+  #   runtime: docker
+  #   dockerfilePath: ./Dockerfile
+  #   region: singapore
+  #   plan: starter
+  #   dockerCommand: node worker.js
+  #   envVars:
+  #     - fromGroup: reservme
 
 envVarGroups:
   - name: reservme
@@ -98,4 +111,12 @@ envVarGroups:
       - key: SMTP_USER
         sync: false
       - key: SMTP_PASS
+        sync: false
+      # Worker-free operation (this single-service Blueprint). Run event-driven
+      # jobs in-process, and drive scheduled jobs via an external cron hitting
+      # GET /api/cron with `Authorization: Bearer <CRON_SECRET>`. Remove
+      # INLINE_JOBS if you re-enable the dedicated worker above.
+      - key: INLINE_JOBS
+        value: "true"
+      - key: CRON_SECRET
         sync: false

@@ -24,6 +24,13 @@ const serverSchema = z.object({
   SMTP_SECURE: z.enum(["true", "false"]).optional(),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
+
+  // Worker-free operation (optional). INLINE_JOBS=true runs event-driven jobs
+  // (booking confirmation, webhooks) in-process instead of queuing to a worker;
+  // CRON_SECRET gates /api/cron, which an external cron calls to run the
+  // scheduled jobs. Use both when deploying without a background worker.
+  INLINE_JOBS: z.enum(["true", "false"]).optional(),
+  CRON_SECRET: z.string().optional(),
 });
 
 let cached: z.infer<typeof serverSchema> | null = null;

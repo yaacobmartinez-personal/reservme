@@ -1,6 +1,8 @@
 import crypto from "node:crypto";
 import { sql } from "@/db";
 import { getBoss, QUEUES } from "@/lib/jobs/boss";
+import { jobsInline } from "@/lib/jobs/enqueue";
+import { captureException } from "@/lib/observability";
 
 /**
  * Outbound webhooks. Owners register endpoints for booking events; on each event
@@ -86,14 +88,30 @@ export async function enqueueWebhookEvent(
   if (endpoints.length === 0) return;
 
   const body = JSON.stringify({ event, data, sentAt: new Date().toISOString() });
+  const jobs = endpoints.map((ep) => ({
+    url: ep.url,
+    event,
+    body,
+    signature: signPayload(ep.secret, body),
+  }));
+
+  // Worker-free mode: deliver in-process, best-effort. A dead endpoint must not
+  // break the booking that triggered this, and there's no worker to retry, so a
+  // failure is captured and swallowed rather than thrown.
+  if (jobsInline()) {
+    for (const job of jobs) {
+      try {
+        await deliverWebhook(job);
+      } catch (error) {
+        captureException(error, { where: "webhook.inline", url: job.url, event });
+      }
+    }
+    return;
+  }
+
   const boss = await getBoss();
-  for (const ep of endpoints) {
-    await boss.send(QUEUES.webhookDelivery, {
-      url: ep.url,
-      event,
-      body,
-      signature: signPayload(ep.secret, body),
-    });
+  for (const job of jobs) {
+    await boss.send(QUEUES.webhookDelivery, job);
   }
 }
 
