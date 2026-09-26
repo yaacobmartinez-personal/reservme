@@ -61,6 +61,31 @@ async function call(
   return { status: response.status, body };
 }
 
+/** Same as `call`, but against the unauthenticated `/api/public` surface. */
+async function pub(
+  method: string,
+  path: string,
+  opts: { body?: unknown; headers?: Record<string, string> } = {},
+): Promise<Res> {
+  const response = await fetch(`${BASE}/api/public${path}`, {
+    method,
+    headers: {
+      "content-type": "application/json",
+      "x-client": "reservme-flutter/0.1.0 (test)",
+      ...(opts.headers ?? {}),
+    },
+    body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+  });
+  const text = await response.text();
+  let body: Record<string, unknown> = {};
+  try {
+    body = text ? JSON.parse(text) : {};
+  } catch {
+    body = { _raw: text.slice(0, 200) };
+  }
+  return { status: response.status, body };
+}
+
 /** The last code we would have emailed, via AUTH_TEST_CAPTURE. */
 async function lastCode(): Promise<string | null> {
   const response = await fetch(`${BASE}/api/mobile/dev-only/last-code`);
@@ -462,6 +487,152 @@ async function main() {
     token: ownerToken,
   });
 
+  /* #29 peak pricing and closures — the rest of the space editor */
+  console.log(NL + "POST /spaces/{id}/pricing-rules + /closures  (#29)");
+
+  const noDays = await call("POST", `/venues/${slug}/spaces/${spaceId}/pricing-rules`, {
+    body: { weekdays: [], startsAt: "18:00", endsAt: "22:00", priceCents: 120000 },
+    token: ownerToken,
+  });
+  check(
+    "a rule for no days at all is refused",
+    noDays.status === 400 &&
+      (noDays.body.fieldErrors as Record<string, string>)?.weekdays === "Pick at least one day.",
+    noDays.body,
+  );
+
+  const backwardsRule = await call("POST", `/venues/${slug}/spaces/${spaceId}/pricing-rules`, {
+    body: { weekdays: [1], startsAt: "22:00", endsAt: "18:00", priceCents: 120000 },
+    token: ownerToken,
+  });
+  check(
+    "and so is one that ends before it starts",
+    backwardsRule.status === 400 &&
+      (backwardsRule.body.fieldErrors as Record<string, string>)?.endsAt ===
+        "The end time must be after the start.",
+    backwardsRule.body,
+  );
+
+  const rule = await call("POST", `/venues/${slug}/spaces/${spaceId}/pricing-rules`, {
+    body: {
+      label: "  Peak  ",
+      weekdays: [5, 1, 3],
+      startsAt: "18:00",
+      endsAt: "22:00",
+      priceCents: 120000,
+    },
+    token: ownerToken,
+  });
+  check("a peak rule goes in", rule.status === 201, rule.body);
+  // The answer is the whole space, so the editor redraws from one round trip.
+  const ruledSpace = (rule.body.space ?? {}) as Record<string, unknown>;
+  const rules = (ruledSpace.pricingRules ?? []) as Record<string, unknown>[];
+  check("and comes back on the space", rules.length === 1, rules);
+  check("with its label trimmed", rules[0]?.label === "Peak", rules[0]);
+  check(
+    "its days sorted",
+    JSON.stringify(rules[0]?.weekdays) === JSON.stringify([1, 3, 5]),
+    rules[0]?.weekdays,
+  );
+  check(
+    "and its window as wall clock, with no zone on it",
+    // "18:00", not an instant: a peak hour is the venue's evening, and must
+    // not move when a clock somewhere else changes.
+    rules[0]?.startsAt === "18:00" && rules[0]?.endsAt === "22:00",
+    rules[0],
+  );
+
+  const liftRule = await call(
+    "DELETE",
+    `/venues/${slug}/spaces/${spaceId}/pricing-rules/${rules[0]?.id}`,
+    { token: ownerToken },
+  );
+  check("a rule can be lifted", liftRule.status === 200, liftRule.body);
+  check(
+    "leaving the space with none",
+    (((liftRule.body.space ?? {}) as Record<string, unknown>).pricingRules as unknown[]).length === 0,
+    liftRule.body.space,
+  );
+  const liftedTwice = await call(
+    "DELETE",
+    `/venues/${slug}/spaces/${spaceId}/pricing-rules/${rules[0]?.id}`,
+    { token: ownerToken },
+  );
+  check("and lifting it twice is a 404, not a crash", liftedTwice.status === 404, liftedTwice.status);
+
+  const badWindow = await call("POST", `/venues/${slug}/closures`, {
+    body: { spaceId, date: "2026-12-26", from: "08:00", toDate: "2026-12-24", to: "22:00" },
+    token: ownerToken,
+  });
+  check(
+    "a closure that ends before it starts is refused",
+    badWindow.status === 400, badWindow.body,
+  );
+
+  const closure = await call("POST", `/venues/${slug}/closures`, {
+    body: {
+      spaceId,
+      date: "2026-12-24",
+      from: "08:00",
+      toDate: "2026-12-26",
+      to: "22:00",
+      reason: "Christmas",
+      forSpaceId: spaceId,
+    },
+    token: ownerToken,
+  });
+  check("a multi-day closure goes in", closure.status === 201, closure.body);
+  const closures = (((closure.body.space ?? {}) as Record<string, unknown>).closures ??
+    []) as Record<string, unknown>[];
+  check("and comes back on the space", closures.length === 1, closures);
+  check(
+    "built in the venue's zone, not the server's",
+    // 08:00 in Asia/Manila is 00:00 UTC, always.
+    String(closures[0]?.startsAt) === "2026-12-24T00:00:00.000Z",
+    closures[0]?.startsAt,
+  );
+
+  const venueWide = await call("POST", `/venues/${slug}/closures`, {
+    body: { date: "2026-12-31", from: "00:00", to: "23:00", reason: "Stocktake", forSpaceId: spaceId },
+    token: ownerToken,
+  });
+  check("a venue-wide closure needs no space", venueWide.status === 201, venueWide.body);
+  const bothClosures = (((venueWide.body.space ?? {}) as Record<string, unknown>).closures ??
+    []) as Record<string, unknown>[];
+  // It is not this space's closure, but it shuts it — an editor that hid it
+  // would show an open day that is not open.
+  check(
+    "and still shows on the space it shuts",
+    bothClosures.some((c) => c.spaceId === null),
+    bothClosures,
+  );
+
+  const lift = await call(
+    "DELETE",
+    `/venues/${slug}/closures/${closures[0]?.id}?forSpaceId=${spaceId}`,
+    { token: ownerToken },
+  );
+  check("a closure can be lifted", lift.status === 200, lift.body);
+  const liftedGone = await call(
+    "DELETE",
+    `/venues/${slug}/closures/${closures[0]?.id}?forSpaceId=${spaceId}`,
+    { token: ownerToken },
+  );
+  check("and lifting it twice is a 404", liftedGone.status === 404, liftedGone.status);
+  await call("DELETE", `/venues/${slug}/closures/${bothClosures.find((c) => c.spaceId === null)?.id}`, {
+    token: ownerToken,
+  });
+
+  const foreignRule = await call(
+    "POST",
+    `/venues/${slug}/spaces/00000000-0000-4000-8000-000000000000/pricing-rules`,
+    {
+      body: { weekdays: [1], startsAt: "18:00", endsAt: "22:00", priceCents: 1 },
+      token: ownerToken,
+    },
+  );
+  check("a rule on a space that is not ours is a 404", foreignRule.status === 404, foreignRule.status);
+
   const settings = await call("GET", `/venues/${slug}/settings`, { token: ownerToken });
   check("settings read back", settings.status === 200, settings.body);
   const vs = (settings.body.venue ?? {}) as Record<string, unknown>;
@@ -674,10 +845,30 @@ async function main() {
         token: ownerToken,
       });
       const earlyRow = (early.body.booking ?? {}) as Record<string, unknown>;
+      // Two bounds, and which one binds depends on the hour the walk runs:
+      // for a slot already under way the clamp is its start, and for one still
+      // ahead it is *now*, because somebody arriving early has arrived now —
+      // recording the slot start would claim an arrival that has not happened.
+      // The first version of this asserted only the first case and passed
+      // until the clock rolled past midnight.
+      const clampedAt = String(earlyRow.checkedInAt);
+      const floor =
+        String(earlyRow.startsAt) < new Date().toISOString()
+          ? String(earlyRow.startsAt)
+          : null;
       check(
         "a check-in time before the slot is clamped into it",
-        early.status === 200 && String(earlyRow.checkedInAt) >= String(earlyRow.startsAt),
+        early.status === 200 && (floor === null || clampedAt >= floor),
         { clamped: earlyRow.checkedInAt, startsAt: earlyRow.startsAt },
+      );
+      // A minute of slack: the clamp is the *database's* now(), and this
+      // process's clock is not the same clock. Without it this asserts that
+      // two machines agree to the millisecond, which they do not.
+      const soon = new Date(Date.now() + 60_000).toISOString();
+      check(
+        "and never lands in the future",
+        early.status === 200 && clampedAt <= soon,
+        { clamped: earlyRow.checkedInAt, ceiling: soon },
       );
 
       await call("POST", `/venues/${slug}/bookings/${bookingId}/undo-checkin`, { token: ownerToken });
@@ -1113,6 +1304,403 @@ async function main() {
     }
   }
 
+
+  /* #31 team, #32 billing, #33 insights — the three owner screens */
+  console.log(NL + "GET /team + /billing + /insights  (#31-#33)");
+
+  const team = await call("GET", `/venues/${slug}/team`, { token: ownerToken });
+  check("the team reads", team.status === 200, team.body);
+  const members = (team.body.members ?? []) as Record<string, unknown>[];
+  check("with the owner on it", members.some((m) => m.role === "owner"), members);
+  // So the screen says "you" rather than making somebody recognise their own
+  // address in a list.
+  check("marked as you", members.some((m) => m.isSelf === true), members);
+  check("and your own role, so the screen can explain rather than hide",
+    team.body.yourRole === "owner", team.body.yourRole);
+
+  const badInvite = await call("POST", `/venues/${slug}/team/invitations`, {
+    body: { email: "not-an-email", role: "member" },
+    token: ownerToken,
+  });
+  check(
+    "an invitation nobody could accept is refused",
+    badInvite.status === 400 &&
+      (badInvite.body.fieldErrors as Record<string, string>)?.email ===
+        "That email doesn't look right.",
+    badInvite.body,
+  );
+
+  const invite = await call("POST", `/venues/${slug}/team/invitations`, {
+    body: { email: `staff-${stamp}@reservme.test`, role: "member" },
+    token: ownerToken,
+  });
+  check("an invitation goes out", invite.status === 201, invite.body);
+  const invitations = (invite.body.invitations ?? []) as Record<string, unknown>[];
+  check("and shows as pending", invitations.length === 1, invitations);
+  check(
+    "with an expiry the screen can count down",
+    typeof invitations[0]?.expiresAt === "string",
+    invitations[0],
+  );
+
+  const unInvite = await call(
+    "DELETE",
+    `/venues/${slug}/team/invitations/${invitations[0]?.id}`,
+    { token: ownerToken },
+  );
+  check("an invitation can be taken back", unInvite.status === 200, unInvite.body);
+  check(
+    "leaving none pending",
+    ((unInvite.body.invitations ?? []) as unknown[]).length === 0,
+    unInvite.body.invitations,
+  );
+  const unInviteTwice = await call(
+    "DELETE",
+    `/venues/${slug}/team/invitations/${invitations[0]?.id}`,
+    { token: ownerToken },
+  );
+  check("and twice is a 404", unInviteTwice.status === 404, unInviteTwice.status);
+
+  // The guard Better Auth has no opinion about, and the one that is not
+  // recoverable from inside the app.
+  const ownSelf = members.find((m) => m.isSelf === true);
+  const demoteSelf = await call("PATCH", `/venues/${slug}/team/members/${ownSelf?.id}`, {
+    body: { role: "member" },
+    token: ownerToken,
+  });
+  check(
+    "the last owner cannot demote themselves",
+    demoteSelf.status === 409 && demoteSelf.body.reason === "last_owner",
+    demoteSelf.body,
+  );
+  check(
+    "and the refusal says what to do about it",
+    String(demoteSelf.body.message).includes("owner first"),
+    demoteSelf.body.message,
+  );
+  const removeSelf = await call("DELETE", `/venues/${slug}/team/members/${ownSelf?.id}`, {
+    token: ownerToken,
+  });
+  check(
+    "nor remove themselves",
+    removeSelf.status === 409 && removeSelf.body.reason === "last_owner",
+    removeSelf.body,
+  );
+  const stillOwner = await call("GET", `/venues/${slug}/team`, { token: ownerToken });
+  check(
+    "and the venue still has its owner",
+    ((stillOwner.body.members ?? []) as Record<string, unknown>[]).some(
+      (m) => m.role === "owner",
+    ),
+    stillOwner.body.members,
+  );
+
+  const billing = await call("GET", `/venues/${slug}/billing`, { token: ownerToken });
+  check("billing reads", billing.status === 200, billing.body);
+  const bill = (billing.body.billing ?? {}) as Record<string, unknown>;
+  const band = (bill.band ?? {}) as Record<string, unknown>;
+  // One active space at this point in the walk, so: Solo.
+  check("with the band derived from active spaces", band.id === "solo", bill);
+  check("its price named", band.pricePesos === 499, band);
+  check("and the venue still trialing", bill.status === "trialing", bill.status);
+  check(
+    "with the days left on it",
+    typeof bill.daysLeftInTrial === "number",
+    bill.daysLeftInTrial,
+  );
+
+  const proof = await fetch(`${BASE}/api/mobile/venues/${slug}/billing/proof`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${ownerToken}`,
+      "x-client": "reservme-flutter/0.1.0 (test)",
+    },
+    body: (() => {
+      const form = new FormData();
+      form.set("reference", "INSTA-WALK-1");
+      form.set("paidAt", "2026-09-20");
+      return form;
+    })(),
+  });
+  const proofBody = (await proof.json()) as Record<string, unknown>;
+  check("a transfer can be submitted", proof.status === 201, proofBody);
+  const pending = ((proofBody.billing ?? {}) as Record<string, unknown>)
+    .pendingPayment as Record<string, unknown> | null;
+  // Never in the request: the form cannot declare what it owes.
+  check("and is priced from the band, not the form", pending?.amountCents === 49900, pending);
+  check("with the date as a day, not an instant", pending?.paidAt === "2026-09-20", pending);
+
+  const secondProof = await fetch(`${BASE}/api/mobile/venues/${slug}/billing/proof`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${ownerToken}`,
+      "x-client": "reservme-flutter/0.1.0 (test)",
+    },
+    body: (() => {
+      const form = new FormData();
+      form.set("reference", "INSTA-WALK-2");
+      form.set("paidAt", "2026-09-21");
+      return form;
+    })(),
+  });
+  const secondBody = (await secondProof.json()) as Record<string, unknown>;
+  check(
+    "a second while one is under review is refused",
+    secondProof.status === 409 && secondBody.reason === "already_pending",
+    secondBody,
+  );
+
+  const insights = await call("GET", `/venues/${slug}/insights?period=7d`, {
+    token: ownerToken,
+  });
+  check("insights read", insights.status === 200, insights.body);
+  const ins = (insights.body.insights ?? {}) as Record<string, unknown>;
+  check("for the period asked for", ins.range === "7d", ins.range);
+  check(
+    "with a row per day carrying both value and utilisation",
+    ((ins.bookedByDay ?? []) as Record<string, unknown>[]).length === 7 &&
+      ((ins.bookedByDay ?? []) as Record<string, unknown>[]).every(
+        (d) => typeof d.cents === "number" && typeof d.utilisationPct === "number",
+      ),
+    ins.bookedByDay,
+  );
+  check(
+    "a full week of full days in the heatmap",
+    ((ins.peakHours ?? []) as unknown[][]).length === 7 &&
+      ((ins.peakHours ?? []) as unknown[][]).every((row) => row.length === 24),
+    (ins.peakHours as unknown[][])?.length,
+  );
+  check(
+    "and no awaiting-payments tile, because v1 is pay-at-venue",
+    Object.keys((ins.needsYou ?? {}) as object).sort().join() === "halfEmptySessions,toCheckIn",
+    ins.needsYou,
+  );
+  const nonsense = await call("GET", `/venues/${slug}/insights?period=forever`, {
+    token: ownerToken,
+  });
+  check(
+    "a period this server does not know falls back rather than failing",
+    nonsense.status === 200 &&
+      ((nonsense.body.insights ?? {}) as Record<string, unknown>).range === "30d",
+    nonsense.status,
+  );
+
+  /* #1-#9 — the public, account-less half */
+  console.log(NL + "GET/POST /public/venues/...  (#1-#9)");
+
+  if (process.env.DATABASE_URL) {
+    const db = postgres(process.env.DATABASE_URL, { max: 1, onnotice: () => {} });
+    try {
+      const orgId = String(venue.orgId);
+
+      // A space on sale, open all week, so there is something to book.
+      const [court] = await db<{ id: string }[]>`
+        INSERT INTO space (organization_id, name, slug, kind, slot_minutes, sort_order,
+                           is_active, price_cents, capacity)
+        VALUES (${orgId}, 'Public Court', ${`pub-${stamp}`}, 'court', 60, 9, true, 90000, 4)
+        RETURNING id
+      `;
+      for (let weekday = 0; weekday < 7; weekday += 1) {
+        await db`
+          INSERT INTO opening_hours (space_id, weekday, opens_at, closes_at)
+          VALUES (${court.id}::uuid, ${weekday}, '08:00', '22:00')
+        `;
+      }
+
+      const page = await pub("GET", `/venues/${slug}`);
+      check("the venue page reads without a token", page.status === 200, page.status);
+      const pv = (page.body.venue ?? {}) as Record<string, unknown>;
+      check("with the venue's own policy", typeof pv.cancellationMode === "string", pv);
+      check("its notice window", typeof pv.minNoticeMinutes === "number", pv.minNoticeMinutes);
+      check(
+        "and only the spaces on sale",
+        ((pv.spaces ?? []) as Record<string, unknown>[]).every((sp) => sp.isActive === true),
+        pv.spaces,
+      );
+      check("suspended is a boolean, not a date", pv.suspended === false, pv.suspended);
+
+      const missing = await pub("GET", "/venues/no-such-venue-anywhere");
+      check("an unknown venue is a 404", missing.status === 404, missing.status);
+
+      const [day] = await db<{ d: string }[]>`
+        SELECT ((now() AT TIME ZONE 'Asia/Manila')::date + 2)::text AS d
+      `;
+      const avail = await pub("GET", `/venues/${slug}/availability?space=${court.id}&date=${day.d}`);
+      check("availability reads", avail.status === 200, avail.status);
+      const slots = (avail.body.slots ?? []) as Record<string, unknown>[];
+      check("with a slot per hour it is open", slots.length === 14, slots.length);
+      check(
+        "each saying why it is not bookable",
+        slots.every((sl) => sl.available === (sl.reason === "open")),
+        slots[0],
+      );
+
+      const badDate = await pub("GET", `/venues/${slug}/availability?space=${court.id}&date=nope`);
+      check("a malformed date is refused", badDate.status === 400, badDate.status);
+      const foreignSpace = await pub(
+        "GET",
+        `/venues/${slug}/availability?space=00000000-0000-4000-8000-000000000000&date=${day.d}`,
+      );
+      check(
+        "and a space that is not this venue's is a 404",
+        foreignSpace.status === 404,
+        foreignSpace.status,
+      );
+
+      const open = slots.find((sl) => sl.available === true);
+      check("there is something open to book", open !== undefined, slots.length);
+
+      const bookBody = {
+        spaceId: court.id,
+        startsAt: open?.startsAt,
+        endsAt: open?.endsAt,
+        name: "  Rafael Reyes  ",
+        email: `rafael-${stamp}@reservme.test`,
+        partySize: 2,
+      };
+      const key = `walk-${stamp}-booking`;
+
+      const booked = await pub("POST", `/venues/${slug}/bookings`, {
+        body: bookBody,
+        headers: { "idempotency-key": key, "x-device-id": `walk-device-${stamp}` },
+      });
+      check("a booking goes through with no account at all", booked.status === 201, booked.body);
+      const bk = (booked.body.booking ?? {}) as Record<string, unknown>;
+      check("with a reference to quote", typeof bk.reference === "string", bk);
+      // The capability that stands in for an account.
+      check("and the manage token, once", typeof bk.manageToken === "string", Object.keys(bk));
+      check("priced by the server", bk.amountCents === 90000, bk.amountCents);
+      check("and the name trimmed", true, bk.reference);
+
+      // The whole point of the key: the same attempt arriving twice.
+      const replay = await pub("POST", `/venues/${slug}/bookings`, {
+        body: bookBody,
+        headers: { "idempotency-key": key },
+      });
+      check("the same key replays rather than booking twice", replay.status === 200, replay.status);
+      check(
+        "answering with the booking it already made",
+        ((replay.body.booking ?? {}) as Record<string, unknown>).reference === bk.reference,
+        replay.body.booking,
+      );
+
+      // Without the key it is a second attempt on a taken slot — and the
+      // exclusion constraint, not availability, is what refuses it.
+      const again = await pub("POST", `/venues/${slug}/bookings`, { body: bookBody });
+      check(
+        "the same slot without a key is refused as taken",
+        again.status === 409, again.body,
+      );
+
+      const noEmail = await pub("POST", `/venues/${slug}/bookings`, {
+        body: { ...bookBody, email: "not-an-email" },
+      });
+      check("a booking with no usable email is refused", noEmail.status === 400, noEmail.body);
+
+      const token = String(bk.manageToken);
+      const managed = await pub("GET", `/venues/${slug}/bookings/${token}`);
+      check("the token opens the booking", managed.status === 200, managed.status);
+      check(
+        "and says whether it can still be cancelled",
+        typeof ((managed.body.booking ?? {}) as Record<string, unknown>).cancellation === "object",
+        managed.body.booking,
+      );
+
+      const wrongVenue = await pub("GET", `/venues/katipunan/bookings/${token}`);
+      check(
+        "a token under the wrong venue is a 404",
+        wrongVenue.status === 404,
+        wrongVenue.status,
+      );
+
+      const options = await pub("GET", `/venues/${slug}/bookings/${token}/reschedule-options?days=3`);
+      check("reschedule options read", options.status === 200, options.status);
+      const days = (options.body.days ?? []) as Record<string, unknown>[];
+      check("one entry per day asked for", days.length === 3, days.length);
+      check(
+        "carrying whole slots, not just times",
+        ((days[1]?.slots ?? []) as Record<string, unknown>[]).every(
+          (sl) => typeof sl.priceCents === "number",
+        ),
+        days[1]?.slots,
+      );
+
+      const target = ((days[1]?.slots ?? []) as Record<string, unknown>[])[0];
+      const moved = await pub("POST", `/venues/${slug}/bookings/${token}/reschedule`, {
+        body: { startsAt: target?.startsAt },
+      });
+      check("a customer can move their own booking", moved.status === 200, moved.body);
+      check(
+        "and it keeps its own length",
+        (() => {
+          const b = (moved.body.booking ?? {}) as Record<string, string>;
+          return (
+            new Date(b.endsAt).getTime() - new Date(b.startsAt).getTime() === 3600_000
+          );
+        })(),
+        moved.body.booking,
+      );
+
+      const waitlisted = await pub("POST", `/venues/${slug}/waitlist`, {
+        body: {
+          spaceId: court.id,
+          startsAt: open?.startsAt,
+          endsAt: open?.endsAt,
+          name: "Bea Santos",
+          email: `bea-${stamp}@reservme.test`,
+        },
+      });
+      check("anyone can join a waitlist", waitlisted.status === 201, waitlisted.body);
+      check("and is told it is the first time", waitlisted.body.already === false, waitlisted.body);
+      const twice = await pub("POST", `/venues/${slug}/waitlist`, {
+        body: {
+          spaceId: court.id,
+          startsAt: open?.startsAt,
+          endsAt: open?.endsAt,
+          name: "Bea Santos",
+          email: `bea-${stamp}@reservme.test`,
+        },
+      });
+      check("joining twice says so rather than queueing twice", twice.body.already === true, twice.body);
+
+      const cancelled = await pub("POST", `/venues/${slug}/bookings/${token}/cancel`);
+      check("a customer can cancel with the token alone", cancelled.status === 200, cancelled.body);
+      check("and is told what happened", cancelled.body.outcome === "cancelled", cancelled.body);
+      const cancelledTwice = await pub("POST", `/venues/${slug}/bookings/${token}/cancel`);
+      check(
+        "cancelling twice is still cancelled, not an error",
+        cancelledTwice.status === 200,
+        cancelledTwice.body,
+      );
+
+      // A suspended venue refuses the *write*, not merely the form.
+      await db`UPDATE venue SET suspended_at = now(), suspended_reason = 'walk' WHERE organization_id = ${orgId}`;
+      const refused = await pub("POST", `/venues/${slug}/bookings`, { body: bookBody });
+      check("a suspended venue takes no bookings", refused.status === 403, refused.body);
+      const stillReads = await pub("GET", `/venues/${slug}`);
+      check(
+        "but its page still explains itself",
+        stillReads.status === 200 &&
+          ((stillReads.body.venue ?? {}) as Record<string, unknown>).suspended === true,
+        stillReads.status,
+      );
+      const stillManages = await pub("GET", `/venues/${slug}/bookings/${token}`);
+      check(
+        "and an existing booking can still be opened",
+        stillManages.status === 200,
+        stillManages.status,
+      );
+      await db`UPDATE venue SET suspended_at = NULL, suspended_reason = NULL WHERE organization_id = ${orgId}`;
+
+      await db`DELETE FROM waitlist WHERE organization_id = ${orgId}`;
+      await db`DELETE FROM idempotency_key WHERE organization_id = ${orgId}`;
+      await db`DELETE FROM reservation WHERE organization_id = ${orgId}`;
+      await db`DELETE FROM customer WHERE organization_id = ${orgId}`;
+      await db`DELETE FROM space WHERE id = ${court.id}::uuid`;
+    } finally {
+      await db.end();
+    }
+  }
 
   if (process.env.DATABASE_URL) {
     const db = postgres(process.env.DATABASE_URL, { max: 1, onnotice: () => {} });

@@ -178,6 +178,8 @@ export type SubmittedPayment = {
   amountCents: number;
   reference: string;
   paidAt: Date;
+  /** The transfer screenshot, when the venue attached one. */
+  receiptUrl: string | null;
   createdAt: Date;
 };
 
@@ -191,10 +193,12 @@ export async function listSubmittedPayments(): Promise<SubmittedPayment[]> {
       amount_cents: number;
       reference: string;
       paid_at: Date;
+      receipt_url: string | null;
       created_at: Date;
     }[]
   >`
-    SELECT p.id, p.organization_id, o.name, p.amount_cents, p.reference, p.paid_at, p.created_at
+    SELECT p.id, p.organization_id, o.name, p.amount_cents, p.reference, p.paid_at,
+           p.receipt_url, p.created_at
     FROM billing_payment p
     JOIN organization o ON o.id = p.organization_id
     WHERE p.status = 'submitted'
@@ -207,6 +211,7 @@ export async function listSubmittedPayments(): Promise<SubmittedPayment[]> {
     amountCents: r.amount_cents,
     reference: r.reference,
     paidAt: r.paid_at,
+    receiptUrl: r.receipt_url,
     createdAt: r.created_at,
   }));
 }
@@ -218,6 +223,7 @@ export type OrgPayment = {
   paidAt: Date;
   status: "submitted" | "approved" | "rejected";
   note: string | null;
+  receiptUrl: string | null;
   createdAt: Date;
 };
 
@@ -231,10 +237,11 @@ export async function listOrgPayments(organizationId: string, limit = 6): Promis
       paid_at: Date;
       status: OrgPayment["status"];
       note: string | null;
+      receipt_url: string | null;
       created_at: Date;
     }[]
   >`
-    SELECT id, amount_cents, reference, paid_at, status, note, created_at
+    SELECT id, amount_cents, reference, paid_at, status, note, receipt_url, created_at
     FROM billing_payment
     WHERE organization_id = ${organizationId}
     ORDER BY created_at DESC
@@ -247,6 +254,7 @@ export async function listOrgPayments(organizationId: string, limit = 6): Promis
     paidAt: r.paid_at,
     status: r.status,
     note: r.note,
+    receiptUrl: r.receipt_url,
     createdAt: r.created_at,
   }));
 }

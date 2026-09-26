@@ -45,11 +45,23 @@ export type DashboardData = {
   utilisationSeries: { day: string; pct: number }[];
   peakHeatmap: number[][]; // [dow 0-6][hour 0-23] = booking count
   bookingMix: { confirmed: number; cancelled: number; noShow: number };
-  bySpace: { name: string; cents: number }[];
-  customers: { newCount: number; returningCount: number; repeatRatePct: number; top: { name: string; bookings: number }[] };
+  bySpace: { spaceId: string; name: string; cents: number }[];
+  customers: {
+    newCount: number;
+    returningCount: number;
+    repeatRatePct: number;
+    top: { customerId: string; name: string; bookings: number }[];
+  };
   needsYou: {
     awaitingPayments: { count: number; cents: number };
-    halfEmptySessions: { title: string; label: string; left: number; capacity: number }[];
+    halfEmptySessions: {
+      id: string;
+      title: string;
+      label: string;
+      startsAt: Date;
+      left: number;
+      capacity: number;
+    }[];
     toCheckIn: number;
   };
 };
@@ -144,8 +156,8 @@ export async function getDashboard(
         GROUP BY r.status
       `,
       // ── booked value by space (current window) ──
-      sql<{ name: string; cents: number }[]>`
-        SELECT s.name, COALESCE(sum(r.amount_cents),0)::int AS cents
+      sql<{ space_id: string; name: string; cents: number }[]>`
+        SELECT s.id AS space_id, s.name, COALESCE(sum(r.amount_cents),0)::int AS cents
         FROM space s
         LEFT JOIN reservation r
           ON r.space_id = s.id AND r.status='confirmed'
@@ -161,7 +173,7 @@ export async function getDashboard(
           new_count: number;
           returning_count: number;
           total_booked: number;
-          top: { name: string; bookings: number }[];
+          top: { customerId: string; name: string; bookings: number }[];
         }[]
       >`
         WITH booked AS (
@@ -191,7 +203,7 @@ export async function getDashboard(
           (SELECT count(*)::int FROM booked) AS total_booked,
           COALESCE((
             SELECT json_agg(t) FROM (
-              SELECT c.name, b.n AS bookings
+              SELECT c.id AS "customerId", c.name, b.n AS bookings
               FROM booked b JOIN customer c ON c.id = b.customer_id
               ORDER BY b.n DESC, c.name LIMIT 5
             ) t
@@ -204,8 +216,17 @@ export async function getDashboard(
         WHERE organization_id = ${organizationId} AND status='awaiting'
       `,
       // ── needs you: half-empty upcoming sessions ──
-      sql<{ title: string; label: string; left: number; capacity: number }[]>`
-        SELECT ps.title,
+      sql<
+        {
+          id: string;
+          title: string;
+          label: string;
+          starts_at: Date;
+          left: number;
+          capacity: number;
+        }[]
+      >`
+        SELECT ps.id, ps.title, ps.starts_at,
           to_char(ps.starts_at AT TIME ZONE ${timezone}, 'Dy DD Mon HH24:MI') AS label,
           (ps.capacity - ps.booked_spots) AS left, ps.capacity
         FROM play_session ps
@@ -315,7 +336,7 @@ export async function getDashboard(
       cancelled: mixMap.get("cancelled") ?? 0,
       noShow: mixMap.get("no_show") ?? 0,
     },
-    bySpace: spaces,
+    bySpace: spaces.map((s) => ({ spaceId: s.space_id, name: s.name, cents: s.cents })),
     customers: {
       newCount: custRow?.new_count ?? 0,
       returningCount,
@@ -324,7 +345,14 @@ export async function getDashboard(
     },
     needsYou: {
       awaitingPayments: { count: awaiting[0]?.count ?? 0, cents: awaiting[0]?.cents ?? 0 },
-      halfEmptySessions: sessions,
+      halfEmptySessions: sessions.map((s) => ({
+        id: s.id,
+        title: s.title,
+        label: s.label,
+        startsAt: s.starts_at,
+        left: s.left,
+        capacity: s.capacity,
+      })),
       toCheckIn: checkins[0]?.n ?? 0,
     },
   };
