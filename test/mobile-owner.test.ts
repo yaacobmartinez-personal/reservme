@@ -17,7 +17,7 @@ const TZ = "Asia/Manila";
 let sql: postgres.Sql;
 let ownerMemberId: string;
 let staffMemberId: string;
-let courtIds: string[] = [];
+const courtIds: string[] = [];
 
 async function member(userId: string, name: string, email: string, role: string) {
   await sql`
