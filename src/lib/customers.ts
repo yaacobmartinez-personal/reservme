@@ -19,7 +19,7 @@ import { sql } from "@/db";
 
 const BOOKABLE = sql`r.kind IN ('rental','session_seat')`;
 
-export type CustomerSegment = "all" | "new" | "at_risk" | "no_shows";
+export type CustomerSegment = "all" | "new" | "regulars" | "at_risk" | "no_shows";
 export type CustomerSort = "recent" | "name" | "bookings" | "value" | "last_visit";
 
 export const PAGE_SIZE = 25;
@@ -104,6 +104,12 @@ export async function listCustomers(
         sql`a.last_visit IS NOT NULL AND (a.last_visit AT TIME ZONE ${timezone})::date < (now() AT TIME ZONE ${timezone})::date - 60`,
       );
       break;
+    case "regulars":
+      // Someone who has been back, rather than someone who came once. The app
+      // has this chip and the web list does not; the threshold matches the
+      // fake world the screen was built against.
+      filters.push(sql`COALESCE(a.bookings, 0) >= 3`);
+      break;
     case "no_shows":
       filters.push(sql`c.no_show_count > 0`);
       break;
@@ -182,6 +188,13 @@ export type CustomerBooking = {
   status: string;
   kind: string;
   amountCents: number;
+  /** The customer quotes this on the phone; the app shows it in mono. */
+  reference: string;
+  startsAt: Date;
+  checkedInAt: Date | null;
+  /** "Sat 26 Sep" and "17:00", both venue-local — the app joins them itself. */
+  dayLabel: string;
+  timeLabel: string;
 };
 
 export type CustomerNote = {
@@ -204,6 +217,8 @@ export type CustomerProfile = {
   lifetimeValueCents: number;
   loyaltyPoints: number;
   lastVisit: Date | null;
+  /** Whole days since `lastVisit`, counted in the venue's own timezone. */
+  lastVisitDays: number | null;
   upcoming: CustomerBooking[];
   past: CustomerBooking[];
   notes: CustomerNote[];
@@ -229,6 +244,7 @@ export async function getCustomer(
       bookings: number;
       ltv_cents: number;
       last_visit: Date | null;
+      last_visit_days: number | null;
     }[]
   >`
     SELECT c.id, c.name, c.email, c.phone, c.tags, c.no_show_count,
@@ -238,7 +254,11 @@ export async function getCustomer(
            COALESCE(sum(r.amount_cents) FILTER (
              WHERE r.status = 'confirmed' AND ${BOOKABLE}), 0)::int AS ltv_cents,
            max(r.starts_at) FILTER (
-             WHERE r.status = 'confirmed' AND r.starts_at <= now()) AS last_visit
+             WHERE r.status = 'confirmed' AND r.starts_at <= now()) AS last_visit,
+           ((now() AT TIME ZONE ${timezone})::date
+             - (max(r.starts_at) FILTER (
+                 WHERE r.status = 'confirmed' AND r.starts_at <= now())
+                AT TIME ZONE ${timezone})::date)::int AS last_visit_days
     FROM customer c
     LEFT JOIN reservation r ON r.customer_id = c.id
     WHERE c.id = ${customerId}::uuid AND c.organization_id = ${organizationId}
@@ -256,12 +276,19 @@ export async function getCustomer(
         status: string;
         kind: string;
         amount_cents: number;
+        reference: string;
+        starts_at: Date;
+        checked_in_at: Date | null;
+        day_label: string;
+        time_label: string;
         upcoming: boolean;
       }[]
     >`
       SELECT r.id, s.name AS space_name,
              to_char(r.starts_at AT TIME ZONE ${timezone}, 'Dy DD Mon YYYY, HH24:MI') AS when_label,
-             r.status, r.kind, r.amount_cents,
+             to_char(r.starts_at AT TIME ZONE ${timezone}, 'Dy DD Mon') AS day_label,
+             to_char(r.starts_at AT TIME ZONE ${timezone}, 'HH24:MI') AS time_label,
+             r.status, r.kind, r.amount_cents, r.reference, r.starts_at, r.checked_in_at,
              (r.starts_at > now()) AS upcoming
       FROM reservation r
       JOIN space s ON s.id = r.space_id
@@ -291,6 +318,11 @@ export async function getCustomer(
     status: b.status,
     kind: b.kind,
     amountCents: b.amount_cents,
+    reference: b.reference,
+    startsAt: b.starts_at,
+    checkedInAt: b.checked_in_at,
+    dayLabel: b.day_label,
+    timeLabel: b.time_label,
   });
 
   return {
@@ -306,6 +338,7 @@ export async function getCustomer(
     lifetimeValueCents: base.ltv_cents,
     loyaltyPoints: base.loyalty_points,
     lastVisit: base.last_visit,
+    lastVisitDays: base.last_visit_days,
     // upcoming comes back newest-first from the DESC sort; flip it so the next
     // booking reads top-down chronologically.
     upcoming: bookings.filter((b) => b.upcoming).reverse().map(toBooking),

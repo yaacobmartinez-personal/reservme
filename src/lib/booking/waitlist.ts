@@ -47,8 +47,17 @@ export type WaitlistEntry = {
   whenLabel: string;
   customerName: string;
   customerEmail: string;
+  customerPhone: string | null;
   status: string;
   createdLabel: string;
+  /** "Sat 26 Sep" and "12:00", venue-local, for callers that join them
+   *  differently from the dashboard table. */
+  dayLabel: string;
+  timeLabel: string;
+  startsAt: Date;
+  endsAt: Date;
+  createdAt: Date;
+  notifiedAt: Date | null;
 };
 
 /** Upcoming waiting/notified entries for the owner's waitlist view. */
@@ -60,13 +69,23 @@ export async function listWaitlist(organizationId: string, timezone: string): Pr
       when_label: string;
       customer_name: string;
       customer_email: string;
+      customer_phone: string | null;
       status: string;
       created_label: string;
+      day_label: string;
+      time_label: string;
+      starts_at: Date;
+      ends_at: Date;
+      created_at: Date;
+      notified_at: Date | null;
     }[]
   >`
     SELECT w.id, s.name AS space_name,
       to_char(w.starts_at AT TIME ZONE ${timezone}, 'Dy DD Mon, HH24:MI') AS when_label,
-      c.name AS customer_name, c.email AS customer_email, w.status,
+      to_char(w.starts_at AT TIME ZONE ${timezone}, 'Dy DD Mon') AS day_label,
+      to_char(w.starts_at AT TIME ZONE ${timezone}, 'HH24:MI') AS time_label,
+      c.name AS customer_name, c.email AS customer_email, c.phone AS customer_phone,
+      w.status, w.starts_at, w.ends_at, w.created_at, w.notified_at,
       to_char(w.created_at AT TIME ZONE ${timezone}, 'DD Mon') AS created_label
     FROM waitlist w
     JOIN space s    ON s.id = w.space_id
@@ -82,8 +101,15 @@ export async function listWaitlist(organizationId: string, timezone: string): Pr
     whenLabel: r.when_label,
     customerName: r.customer_name,
     customerEmail: r.customer_email,
+    customerPhone: r.customer_phone,
     status: r.status,
     createdLabel: r.created_label,
+    dayLabel: r.day_label,
+    timeLabel: r.time_label,
+    startsAt: r.starts_at,
+    endsAt: r.ends_at,
+    createdAt: r.created_at,
+    notifiedAt: r.notified_at,
   }));
 }
 
